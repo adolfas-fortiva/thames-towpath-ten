@@ -1,6 +1,7 @@
 'use client'
 import { useState } from 'react'
 import dynamic from 'next/dynamic'
+import ErrorBoundary from './components/ErrorBoundary'
 
 const ZonesTab       = dynamic(() => import('./components/ZonesTab'),       { ssr: false })
 const FieldTab       = dynamic(() => import('./components/FieldTab'),        { ssr: false })
@@ -55,7 +56,11 @@ export default function Page() {
         </div>
       </div>
       <div style={{ padding: 16 }}>
-        {active && <active.Component />}
+        {active && (
+          <ErrorBoundary key={active.id}>
+            <active.Component />
+          </ErrorBoundary>
+        )}
       </div>
     </div>
   )
