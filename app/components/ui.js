@@ -16,8 +16,8 @@ export const SectionHead = ({ title, right }) => (
   </div>
 )
 
-export const Pill = ({ active, onClick, children, color }) => (
-  <button onClick={onClick} style={{ padding: '7px 16px', borderRadius: 20, border: `1.5px solid ${active ? (color || YELLOW) : 'rgba(255,255,255,0.15)'}`, background: active ? (color || YELLOW) : 'transparent', color: active ? NAVY : 'rgba(255,255,255,0.5)', cursor: 'pointer', fontSize: 13, fontWeight: active ? 700 : 400, transition: 'all 0.15s' }}>{children}</button>
+export const Pill = ({ active, onClick, children }) => (
+  <button onClick={onClick} style={{ padding: '7px 16px', borderRadius: 20, border: `1.5px solid ${active ? YELLOW : 'rgba(255,255,255,0.15)'}`, background: active ? YELLOW : 'transparent', color: active ? NAVY : 'rgba(255,255,255,0.5)', cursor: 'pointer', fontSize: 13, fontWeight: active ? 700 : 400, transition: 'all 0.15s' }}>{children}</button>
 )
 
 export const Tick = ({ done, onClick, size = 28 }) => (
@@ -32,7 +32,6 @@ export const inputStyle = {
 
 export const selectStyle = { ...inputStyle, appearance: 'none', WebkitAppearance: 'none' }
 
-// UK mobile: starts 07, 11 digits total
 export function validatePhone(raw) {
   const digits = raw.replace(/\D/g, '')
   if (digits.length !== 11) return 'Must be 11 digits'
@@ -44,63 +43,39 @@ export function formatPhone(raw) {
   return raw.replace(/\D/g, '')
 }
 
-// Swap dropdown — reads from passed volunteers list (from Supabase)
+// Swap dropdown — only shows existing volunteers from Supabase. No add-new here.
 export function SwapDropdown({ currentName, volunteers = [], usedNames = [], onSave, onCancel }) {
-  const [selected,    setSelected]    = useState('')
-  const [newName,     setNewName]     = useState('')
-  const [newPhone,    setNewPhone]    = useState('')
-  const [phoneError,  setPhoneError]  = useState('')
-  const [warn,        setWarn]        = useState(null)
-
-  const isNew    = selected === '__new__'
-  const pickName = isNew ? newName.trim() : selected
+  const [selected, setSelected] = useState('')
+  const [warn,     setWarn]     = useState(null)
 
   const handleConfirm = () => {
-    if (!pickName) return
-
-    if (isNew) {
-      const err = validatePhone(newPhone)
-      if (err) { setPhoneError(err); return }
-    }
-
+    if (!selected) return
     if (!warn) {
-      const dup = usedNames.find(u => u.name === pickName && u.name !== currentName)
+      const dup = usedNames.find(u => u.name === selected && u.name !== currentName)
       if (dup) { setWarn(dup); return }
     }
-
-    const phone = isNew ? formatPhone(newPhone) : (volunteers.find(v => v.name === pickName)?.phone || '')
-    onSave({ name: pickName, phone, isNew })
+    const vol = volunteers.find(v => v.name === selected)
+    onSave({ name: selected, phone: vol?.phone || '' })
   }
 
   return (
     <div style={{ padding: '0 16px 12px', display: 'flex', flexDirection: 'column', gap: 8 }}>
-      <select value={selected} onChange={e => { setSelected(e.target.value); setWarn(null); setPhoneError('') }} style={selectStyle}>
-        <option value="">— select replacement —</option>
+      <select value={selected} onChange={e => { setSelected(e.target.value); setWarn(null) }} style={selectStyle}>
+        <option value="">— select volunteer —</option>
         {volunteers.map(v => (
-          <option key={v.id || v.name} value={v.name}>{v.name} · {v.phone}</option>
+          <option key={v.id} value={v.name}>{v.name} · {v.phone}</option>
         ))}
-        <option value="__new__">+ New person…</option>
       </select>
-
-      {isNew && (
-        <>
-          <input value={newName} onChange={e => setNewName(e.target.value)} placeholder="Full name" style={inputStyle} />
-          <div>
-            <input value={newPhone} onChange={e => { setNewPhone(e.target.value); setPhoneError('') }} placeholder="07xxx xxxxxx (11 digits)" style={{ ...inputStyle, borderColor: phoneError ? '#ef4444' : 'rgba(255,255,255,0.15)' }} />
-            {phoneError && <div style={{ fontSize: 11, color: '#ef4444', marginTop: 4 }}>{phoneError}</div>}
-          </div>
-        </>
-      )}
 
       {warn && (
         <div style={{ fontSize: 12, color: YELLOW, background: 'rgba(254,203,0,0.1)', border: '1px solid rgba(254,203,0,0.25)', borderRadius: 8, padding: '8px 10px', lineHeight: 1.5 }}>
-          {warn.name} is also assigned to <strong>{warn.role}</strong>. Some people have dual roles — confirm if intentional.
+          {warn.name} is also assigned to <strong>{warn.role}</strong>. Dual roles — confirm if intentional.
         </div>
       )}
 
       <div style={{ display: 'flex', gap: 8 }}>
-        <button onClick={handleConfirm} disabled={!pickName}
-          style={{ flex: 1, padding: 8, borderRadius: 8, background: pickName ? YELLOW : 'rgba(255,255,255,0.08)', color: pickName ? NAVY : 'rgba(255,255,255,0.3)', border: 'none', fontWeight: 700, fontSize: 13, cursor: pickName ? 'pointer' : 'not-allowed' }}>
+        <button onClick={handleConfirm} disabled={!selected}
+          style={{ flex: 1, padding: 8, borderRadius: 8, background: selected ? YELLOW : 'rgba(255,255,255,0.08)', color: selected ? NAVY : 'rgba(255,255,255,0.3)', border: 'none', fontWeight: 700, fontSize: 13, cursor: selected ? 'pointer' : 'not-allowed' }}>
           {warn ? 'Confirm anyway' : 'Confirm swap'}
         </button>
         <button onClick={onCancel}

@@ -14,11 +14,9 @@ function TimeInput({ value, onChange }) {
   const [raw, setRaw] = useState(value || '')
   useEffect(() => setRaw(value || ''), [value])
   return (
-    <input value={raw}
-      onChange={e => { const f = formatTime(e.target.value); setRaw(f); onChange(f) }}
+    <input value={raw} onChange={e => { const f = formatTime(e.target.value); setRaw(f); onChange(f) }}
       placeholder="MM:SS" maxLength={5}
-      style={{ flex: 1, background: 'rgba(255,255,255,0.07)', border: '1px solid rgba(255,255,255,0.15)', borderRadius: 8, padding: '7px 10px', fontSize: 13, color: YELLOW, outline: 'none', fontFamily: 'monospace', minWidth: 0 }}
-    />
+      style={{ flex: 1, background: 'rgba(255,255,255,0.07)', border: '1px solid rgba(255,255,255,0.15)', borderRadius: 8, padding: '7px 10px', fontSize: 13, color: YELLOW, outline: 'none', fontFamily: 'monospace', minWidth: 0 }} />
   )
 }
 
@@ -41,7 +39,7 @@ export default function PrizesTab() {
       })
       setEntries(e); setPresented(p)
     })
-    const ch = supabase.channel('prizes_v2')
+    const ch = supabase.channel('prizes_ch')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'prizes' }, ({ new: r }) => {
         setEntries(prev => ({
           ...prev,
@@ -74,7 +72,7 @@ export default function PrizesTab() {
   }
 
   const activeSection = PRIZE_CATEGORIES_V2.find(s => s.section === tab)
-  const isSpot = activeSection?.section === 'Spot Prizes'
+  const isSpot = tab === 'Spot Prizes'
 
   return (
     <div>
@@ -99,9 +97,7 @@ export default function PrizesTab() {
 
       {activeSection && (
         <>
-          {activeSection.note && (
-            <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.35)', marginBottom: 10, paddingLeft: 4 }}>{activeSection.note}</div>
-          )}
+          {activeSection.note && <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.35)', marginBottom: 10, paddingLeft: 4 }}>{activeSection.note}</div>}
 
           {activeSection.groups.map(group => (
             <Card key={group.id} style={{ borderLeft: presented[group.id] ? `3px solid ${YELLOW}` : undefined }}>
@@ -112,25 +108,14 @@ export default function PrizesTab() {
                   {presented[group.id] ? '✓ done' : 'mark done'}
                 </button>
               </div>
-
               <div style={{ padding: '10px 16px', display: 'flex', flexDirection: 'column', gap: 6 }}>
                 {Array.from({ length: group.places }, (_, i) => i + 1).map(place => (
                   <div key={place} style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-                    {group.places > 1 && (
-                      <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.3)', minWidth: 24, flexShrink: 0 }}>{PLACE_LABEL[place - 1]}</span>
-                    )}
-                    <input
-                      value={entries[`${group.id}_${place}_name`] || ''}
-                      onChange={e => save(group.id, place, 'name', e.target.value)}
+                    {group.places > 1 && <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.3)', minWidth: 24, flexShrink: 0 }}>{PLACE_LABEL[place - 1]}</span>}
+                    <input value={entries[`${group.id}_${place}_name`] || ''} onChange={e => save(group.id, place, 'name', e.target.value)}
                       placeholder="Name"
-                      style={{ flex: 2, background: 'rgba(255,255,255,0.07)', border: '1px solid rgba(255,255,255,0.12)', borderRadius: 8, padding: '7px 10px', fontSize: 13, color: '#fff', outline: 'none', fontFamily: 'inherit', minWidth: 0 }}
-                    />
-                    {!isSpot && (
-                      <TimeInput
-                        value={entries[`${group.id}_${place}_time`] || ''}
-                        onChange={v => save(group.id, place, 'time', v)}
-                      />
-                    )}
+                      style={{ flex: 2, background: 'rgba(255,255,255,0.07)', border: '1px solid rgba(255,255,255,0.12)', borderRadius: 8, padding: '7px 10px', fontSize: 13, color: '#fff', outline: 'none', fontFamily: 'inherit', minWidth: 0 }} />
+                    {!isSpot && <TimeInput value={entries[`${group.id}_${place}_time`] || ''} onChange={v => save(group.id, place, 'time', v)} />}
                   </div>
                 ))}
               </div>

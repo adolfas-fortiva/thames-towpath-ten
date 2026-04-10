@@ -141,11 +141,11 @@ export const PRIZE_CATEGORIES = [
     type: 'age',
     note: '1st, 2nd and 3rd place per category',
     categories: [
-      { id: 'f3544', label: 'F35–44', places: 3 },
-      { id: 'f4554', label: 'F45–54', places: 3 },
+      { id: 'f3544', label: 'F35–44', places: 1 },
+      { id: 'f4554', label: 'F45–54', places: 1 },
       { id: 'f55', label: 'F55+', places: 3 },
-      { id: 'm4049', label: 'M40–49', places: 3 },
-      { id: 'm5059', label: 'M50–59', places: 3 },
+      { id: 'm4049', label: 'M40–49', places: 1 },
+      { id: 'm5059', label: 'M50–59', places: 1 },
       { id: 'm60', label: 'M60+', places: 3 },
     ]
   },
@@ -187,12 +187,12 @@ export const PRIZE_CATEGORIES_V2 = [
     timing: '~11:00',
     note: '1st, 2nd and 3rd per category',
     groups: [
-      { id: 'f3544', label: 'F35–44', places: 3 },
-      { id: 'f4554', label: 'F45–54', places: 3 },
-      { id: 'f55',   label: 'F55+',   places: 3 },
-      { id: 'm4049', label: 'M40–49', places: 3 },
-      { id: 'm5059', label: 'M50–59', places: 3 },
-      { id: 'm60',   label: 'M60+',   places: 3 },
+      { id: 'f3544', label: 'F35–44', places: 1 },
+      { id: 'f4554', label: 'F45–54', places: 1 },
+      { id: 'f55',   label: 'F55+',   places: 1 },
+      { id: 'm4049', label: 'M40–49', places: 1 },
+      { id: 'm5059', label: 'M50–59', places: 1 },
+      { id: 'm60',   label: 'M60+',   places: 1 },
     ]
   },
   {

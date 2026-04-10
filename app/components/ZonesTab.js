@@ -4,26 +4,24 @@ import { supabase } from '../supabase'
 import { ZONES } from '../data'
 import { Card, SectionHead, Pill, Tick, SwapDropdown, YELLOW, CYAN } from './ui'
 
-// flat list of all volunteers for the dropdown
-const ALL_VOLUNTEERS = ZONES.flatMap(z => [
-  { name: z.lead, phone: z.leadPhone, role: `${z.name} lead` },
-  ...z.marshals.map(m => ({ name: m.name, phone: m.phone, role: m.id }))
-])
-
 export default function ZonesTab() {
-  const [zone, setZone]         = useState(0)
-  const [expanded, setExpanded] = useState({})
-  const [swapping, setSwapping] = useState({})
-  const [status, setStatus]     = useState({})
+  const [zone,       setZone]       = useState(0)
+  const [expanded,   setExpanded]   = useState({})
+  const [swapping,   setSwapping]   = useState({})
+  const [status,     setStatus]     = useState({})
+  const [volunteers, setVolunteers] = useState([])
 
   useEffect(() => {
+    supabase.from('volunteers').select('id,name,phone').order('name').then(({ data }) => {
+      if (data) setVolunteers(data)
+    })
     supabase.from('marshal_status').select('*').then(({ data }) => {
       if (!data) return
       const map = {}
       data.forEach(r => { map[r.marshal_id] = { arrived: r.arrived, swap_name: r.swap_name } })
       setStatus(map)
     })
-    const ch = supabase.channel('zones_marshal_status')
+    const ch = supabase.channel('zones_status')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'marshal_status' }, ({ new: r }) => {
         setStatus(prev => ({ ...prev, [r.marshal_id]: { arrived: r.arrived, swap_name: r.swap_name } }))
       }).subscribe()
@@ -36,17 +34,16 @@ export default function ZonesTab() {
     await supabase.from('marshal_status').upsert({ marshal_id: id, arrived: !cur, swap_name: status[id]?.swap_name || null }, { onConflict: 'marshal_id' })
   }
 
-  const saveSwap = async (id, name) => {
-    setStatus(prev => ({ ...prev, [id]: { ...prev[id], swap_name: name || null } }))
+  const saveSwap = async (id, { name }) => {
+    setStatus(prev => ({ ...prev, [id]: { ...prev[id], swap_name: name } }))
     setSwapping(prev => ({ ...prev, [id]: false }))
-    await supabase.from('marshal_status').upsert({ marshal_id: id, arrived: status[id]?.arrived || false, swap_name: name || null }, { onConflict: 'marshal_id' })
+    await supabase.from('marshal_status').upsert({ marshal_id: id, arrived: status[id]?.arrived || false, swap_name: name }, { onConflict: 'marshal_id' })
   }
 
-  const allMarshals   = ZONES.flatMap(z => z.marshals)
-  const arrivedCount  = allMarshals.filter(m => status[m.id]?.arrived).length
-  const filtered      = zone === 0 ? ZONES : ZONES.filter(z => z.id === zone)
+  const allMarshals  = ZONES.flatMap(z => z.marshals)
+  const arrivedCount = allMarshals.filter(m => status[m.id]?.arrived).length
+  const filtered     = zone === 0 ? ZONES : ZONES.filter(z => z.id === zone)
 
-  // build used names list for duplicate detection
   const usedNames = allMarshals.map(m => ({
     name: status[m.id]?.swap_name || m.name,
     role: m.id,
@@ -84,30 +81,30 @@ export default function ZonesTab() {
                   <div style={{ color: 'rgba(255,255,255,0.9)', fontWeight: 500, fontSize: 14 }}>{z.lead}</div>
                   <div style={{ color: 'rgba(255,255,255,0.4)', fontSize: 12 }}>Zone lead</div>
                 </div>
-                <a href={`tel:${z.leadPhone.split('/')[0].trim().replace(/\s/g,'')}`} style={{ color: CYAN, fontWeight: 700, fontSize: 15, textDecoration: 'none' }}>{z.leadPhone.split('/')[0].trim()}</a>
+                <a href={`tel:${z.leadPhone.split('/')[0].trim().replace(/\s/g, '')}`} style={{ color: CYAN, fontWeight: 700, fontSize: 14, textDecoration: 'none' }}>{z.leadPhone.split('/')[0].trim()}</a>
               </div>
             </Card>
 
             <Card>
               {z.marshals.map((m, i) => {
-                const st       = status[m.id] || {}
-                const hasSwap  = st.swap_name?.trim()
-                const isLast   = i === z.marshals.length - 1
-                const isSwap   = swapping[m.id]
-                const isExpand = expanded[m.id]
+                const st      = status[m.id] || {}
+                const hasSwap = st.swap_name?.trim()
+                const isLast  = i === z.marshals.length - 1
+                const isSwap  = swapping[m.id]
+                const isExp   = expanded[m.id]
 
                 return (
-                  <div key={m.id} style={{ borderBottom: isLast && !isSwap && !isExpand ? 'none' : '1px solid rgba(255,255,255,0.07)' }}>
+                  <div key={m.id} style={{ borderBottom: isLast && !isSwap && !isExp ? 'none' : '1px solid rgba(255,255,255,0.07)' }}>
                     <div style={{ display: 'flex', alignItems: 'center', padding: '12px 16px', gap: 10 }}>
                       <div style={{ flex: 1, minWidth: 0 }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 4 }}>
-                          <span style={{ fontSize: 10, fontWeight: 700, color: '#1B2869', background: YELLOW, borderRadius: 4, padding: '2px 6px', flexShrink: 0 }}>{m.id}</span>
-                          <span style={{ fontSize: 14, fontWeight: 500, color: 'rgba(255,255,255,0.9)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                          <span style={{ fontSize: 10, fontWeight: 700, color: NAVY, background: YELLOW, borderRadius: 4, padding: '2px 6px', flexShrink: 0 }}>{m.id}</span>
+                          <span style={{ fontSize: 14, fontWeight: 500, color: 'rgba(255,255,255,0.9)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                             {hasSwap ? st.swap_name : m.name}
                           </span>
                         </div>
-                        <a href={`tel:${m.phone.split('/')[0].trim().replace(/\s/g,'')}`} style={{ fontSize: 12, color: CYAN, display: 'block' }}>{m.phone.split('/')[0].trim()}</a>
-                        <a href={`https://w3w.co/${m.w3w}`} target="_blank" rel="noopener noreferrer" style={{ fontSize: 11, color: '#e74c3c', display: 'block', marginTop: 2 }}>///{m.w3w}</a>
+                        <a href={`tel:${m.phone.split('/')[0].trim().replace(/\s/g, '')}`} style={{ fontSize: 12, color: CYAN, display: 'block' }}>{m.phone.split('/')[0].trim()}</a>
+                        {m.w3w && <a href={`https://w3w.co/${m.w3w}`} target="_blank" rel="noopener noreferrer" style={{ fontSize: 11, color: '#e74c3c', display: 'block', marginTop: 2 }}>///{m.w3w}</a>}
                         {hasSwap && <div style={{ fontSize: 11, color: YELLOW, marginTop: 3 }}>↔ swapped from {m.name}</div>}
                       </div>
                       <div style={{ display: 'flex', gap: 8, flexShrink: 0, alignItems: 'center' }}>
@@ -122,20 +119,18 @@ export default function ZonesTab() {
                     {isSwap && (
                       <SwapDropdown
                         currentName={m.name}
-                        allVolunteers={ALL_VOLUNTEERS}
+                        volunteers={volunteers}
                         usedNames={usedNames}
-                        onSave={name => saveSwap(m.id, name)}
+                        onSave={v => saveSwap(m.id, v)}
                         onCancel={() => setSwapping(p => ({ ...p, [m.id]: false }))}
                       />
                     )}
 
                     <button onClick={() => setExpanded(p => ({ ...p, [m.id]: !p[m.id] }))}
                       style={{ display: 'block', width: '100%', textAlign: 'left', padding: '4px 16px 10px', fontSize: 11, color: 'rgba(255,255,255,0.25)', background: 'none', border: 'none', cursor: 'pointer' }}>
-                      {isExpand ? '− hide instructions' : '+ instructions'}
+                      {isExp ? '− hide instructions' : '+ instructions'}
                     </button>
-                    {isExpand && (
-                      <div style={{ padding: '0 16px 12px', fontSize: 13, color: 'rgba(255,255,255,0.5)', lineHeight: 1.7 }}>{m.instructions}</div>
-                    )}
+                    {isExp && <div style={{ padding: '0 16px 12px', fontSize: 13, color: 'rgba(255,255,255,0.5)', lineHeight: 1.7 }}>{m.instructions}</div>}
                   </div>
                 )
               })}
