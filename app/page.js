@@ -10,7 +10,7 @@ const PrizesTab      = dynamic(() => import('./components/PrizesTab'),       { s
 const MileMarkersTab = dynamic(() => import('./components/MileMarkersTab'),  { ssr: false })
 const InspectionTab  = dynamic(() => import('./components/InspectionTab'),   { ssr: false })
 const SOSTab         = dynamic(() => import('./components/SOSTab'),          { ssr: false })
-const VolunteersTab  = dynamic(() => import('./components/VolunteersTab'),   { ssr: false })
+const DataTab        = dynamic(() => import('./components/DataTab'),         { ssr: false })
 const BriefTab       = dynamic(() => import('./components/BriefTab'),        { ssr: false })
 
 const YELLOW = '#FECB00'
@@ -24,10 +24,10 @@ const ROW1 = [
   { id: 'miles',     label: 'Miles',     Component: MileMarkersTab },
 ]
 const ROW2 = [
-  { id: 'inspect',    label: 'Inspect',    Component: InspectionTab },
-  { id: 'brief',      label: 'Brief',      Component: BriefTab },
-  { id: 'sos',        label: 'SOS',        Component: SOSTab },
-  { id: 'volunteers', label: 'Volunteers', Component: VolunteersTab },
+  { id: 'inspect', label: 'Inspect', Component: InspectionTab },
+  { id: 'brief',   label: 'Brief',   Component: BriefTab },
+  { id: 'sos',     label: 'SOS',     Component: SOSTab },
+  { id: 'data',    label: 'Data',    Component: DataTab },
 ]
 const ALL_TABS = [...ROW1, ...ROW2]
 
