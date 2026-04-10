@@ -30,39 +30,66 @@ export const inputStyle = {
   width: '100%', boxSizing: 'border-box', outline: 'none', fontFamily: 'inherit',
 }
 
-export const selectStyle = {
-  ...inputStyle,
-  appearance: 'none', WebkitAppearance: 'none',
+export const selectStyle = { ...inputStyle, appearance: 'none', WebkitAppearance: 'none' }
+
+// UK mobile: starts 07, 11 digits total
+export function validatePhone(raw) {
+  const digits = raw.replace(/\D/g, '')
+  if (digits.length !== 11) return 'Must be 11 digits'
+  if (!digits.startsWith('07')) return 'Must start with 07'
+  return null
 }
 
-export function SwapDropdown({ currentName, allVolunteers, usedNames = [], onSave, onCancel }) {
-  const [selected, setSelected] = useState('')
-  const [custom, setCustom]     = useState('')
-  const [warn, setWarn]         = useState(null)
+export function formatPhone(raw) {
+  return raw.replace(/\D/g, '')
+}
 
-  const pickName = selected === '__new__' ? custom.trim() : selected
+// Swap dropdown — reads from passed volunteers list (from Supabase)
+export function SwapDropdown({ currentName, volunteers = [], usedNames = [], onSave, onCancel }) {
+  const [selected,    setSelected]    = useState('')
+  const [newName,     setNewName]     = useState('')
+  const [newPhone,    setNewPhone]    = useState('')
+  const [phoneError,  setPhoneError]  = useState('')
+  const [warn,        setWarn]        = useState(null)
+
+  const isNew    = selected === '__new__'
+  const pickName = isNew ? newName.trim() : selected
 
   const handleConfirm = () => {
     if (!pickName) return
+
+    if (isNew) {
+      const err = validatePhone(newPhone)
+      if (err) { setPhoneError(err); return }
+    }
+
     if (!warn) {
       const dup = usedNames.find(u => u.name === pickName && u.name !== currentName)
       if (dup) { setWarn(dup); return }
     }
-    onSave(pickName)
+
+    const phone = isNew ? formatPhone(newPhone) : (volunteers.find(v => v.name === pickName)?.phone || '')
+    onSave({ name: pickName, phone, isNew })
   }
 
   return (
     <div style={{ padding: '0 16px 12px', display: 'flex', flexDirection: 'column', gap: 8 }}>
-      <select value={selected} onChange={e => { setSelected(e.target.value); setWarn(null) }} style={selectStyle}>
+      <select value={selected} onChange={e => { setSelected(e.target.value); setWarn(null); setPhoneError('') }} style={selectStyle}>
         <option value="">— select replacement —</option>
-        {allVolunteers.map(v => (
-          <option key={v.name} value={v.name}>{v.name}{v.phone ? ` · ${v.phone}` : ''}</option>
+        {volunteers.map(v => (
+          <option key={v.id || v.name} value={v.name}>{v.name} · {v.phone}</option>
         ))}
         <option value="__new__">+ New person…</option>
       </select>
 
-      {selected === '__new__' && (
-        <input value={custom} onChange={e => setCustom(e.target.value)} placeholder="Full name" style={inputStyle} />
+      {isNew && (
+        <>
+          <input value={newName} onChange={e => setNewName(e.target.value)} placeholder="Full name" style={inputStyle} />
+          <div>
+            <input value={newPhone} onChange={e => { setNewPhone(e.target.value); setPhoneError('') }} placeholder="07xxx xxxxxx (11 digits)" style={{ ...inputStyle, borderColor: phoneError ? '#ef4444' : 'rgba(255,255,255,0.15)' }} />
+            {phoneError && <div style={{ fontSize: 11, color: '#ef4444', marginTop: 4 }}>{phoneError}</div>}
+          </div>
+        </>
       )}
 
       {warn && (

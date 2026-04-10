@@ -1,39 +1,33 @@
 'use client'
 import { useState, useEffect, useCallback } from 'react'
 import { supabase } from '../supabase'
-import { PRIZE_CATEGORIES } from '../data'
+import { PRIZE_CATEGORIES_V2 } from '../data'
 import { Card, SectionHead, Pill, YELLOW, NAVY, CYAN } from './ui'
 
 function formatTime(raw) {
-  // strip non-digits
   const digits = raw.replace(/\D/g, '')
   if (digits.length <= 2) return digits
-  if (digits.length <= 4) return `${digits.slice(0, 2)}:${digits.slice(2)}`
   return `${digits.slice(0, 2)}:${digits.slice(2, 4)}`
 }
 
-function TimeInput({ value, onChange, placeholder = 'MM:SS' }) {
+function TimeInput({ value, onChange }) {
   const [raw, setRaw] = useState(value || '')
-  useEffect(() => { setRaw(value || '') }, [value])
+  useEffect(() => setRaw(value || ''), [value])
   return (
-    <input
-      value={raw}
-      onChange={e => {
-        const f = formatTime(e.target.value)
-        setRaw(f)
-        onChange(f)
-      }}
-      placeholder={placeholder}
-      maxLength={5}
+    <input value={raw}
+      onChange={e => { const f = formatTime(e.target.value); setRaw(f); onChange(f) }}
+      placeholder="MM:SS" maxLength={5}
       style={{ flex: 1, background: 'rgba(255,255,255,0.07)', border: '1px solid rgba(255,255,255,0.15)', borderRadius: 8, padding: '7px 10px', fontSize: 13, color: YELLOW, outline: 'none', fontFamily: 'monospace', minWidth: 0 }}
     />
   )
 }
 
+const PLACE_LABEL = ['1st', '2nd', '3rd']
+
 export default function PrizesTab() {
-  const sections   = PRIZE_CATEGORIES.map(s => s.section.split(' — ')[0])
-  const [tab, setTab]             = useState(sections[0])
-  const [entries, setEntries]     = useState({})
+  const sections = PRIZE_CATEGORIES_V2.map(s => s.section)
+  const [tab,       setTab]       = useState(sections[0])
+  const [entries,   setEntries]   = useState({})
   const [presented, setPresented] = useState({})
 
   useEffect(() => {
@@ -47,7 +41,7 @@ export default function PrizesTab() {
       })
       setEntries(e); setPresented(p)
     })
-    const ch = supabase.channel('prizes_tab')
+    const ch = supabase.channel('prizes_v2')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'prizes' }, ({ new: r }) => {
         setEntries(prev => ({
           ...prev,
@@ -66,20 +60,21 @@ export default function PrizesTab() {
     await supabase.from('prizes').upsert({ category_id: catId, place, winner_name, winner_time, presented: presented[catId] || false }, { onConflict: 'category_id,place' })
   }, [entries, presented])
 
-  const togglePresented = async (cat) => {
-    const cur = presented[cat.id] || false
-    setPresented(prev => ({ ...prev, [cat.id]: !cur }))
-    for (let p = 1; p <= cat.places; p++) {
+  const togglePresented = async (group) => {
+    const cur = presented[group.id] || false
+    setPresented(prev => ({ ...prev, [group.id]: !cur }))
+    for (let p = 1; p <= group.places; p++) {
       await supabase.from('prizes').upsert({
-        category_id: cat.id, place: p,
-        winner_name: entries[`${cat.id}_${p}_name`] || '',
-        winner_time: entries[`${cat.id}_${p}_time`] || '',
+        category_id: group.id, place: p,
+        winner_name: entries[`${group.id}_${p}_name`] || '',
+        winner_time: entries[`${group.id}_${p}_time`] || '',
         presented: !cur
       }, { onConflict: 'category_id,place' })
     }
   }
 
-  const activeSection = PRIZE_CATEGORIES.find(s => s.section.startsWith(tab))
+  const activeSection = PRIZE_CATEGORIES_V2.find(s => s.section === tab)
+  const isSpot = activeSection?.section === 'Spot Prizes'
 
   return (
     <div>
@@ -95,7 +90,11 @@ export default function PrizesTab() {
       </Card>
 
       <div style={{ display: 'flex', gap: 6, marginBottom: 14, flexWrap: 'wrap' }}>
-        {sections.map(s => <Pill key={s} active={tab === s} onClick={() => setTab(s)}>{s}</Pill>)}
+        {PRIZE_CATEGORIES_V2.map(s => (
+          <Pill key={s.section} active={tab === s.section} onClick={() => setTab(s.section)}>
+            {s.section}{s.timing ? ` ${s.timing}` : ''}
+          </Pill>
+        ))}
       </div>
 
       {activeSection && (
@@ -103,31 +102,33 @@ export default function PrizesTab() {
           {activeSection.note && (
             <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.35)', marginBottom: 10, paddingLeft: 4 }}>{activeSection.note}</div>
           )}
-          {activeSection.categories.map(cat => (
-            <Card key={cat.id} style={{ borderLeft: presented[cat.id] ? `3px solid ${YELLOW}` : undefined }}>
+
+          {activeSection.groups.map(group => (
+            <Card key={group.id} style={{ borderLeft: presented[group.id] ? `3px solid ${YELLOW}` : undefined }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 16px', borderBottom: '1px solid rgba(255,255,255,0.07)' }}>
-                <span style={{ fontSize: 14, fontWeight: 600, color: 'rgba(255,255,255,0.9)' }}>{cat.label}</span>
-                <button onClick={() => togglePresented(cat)}
-                  style={{ fontSize: 11, padding: '4px 12px', borderRadius: 10, border: `1px solid ${presented[cat.id] ? YELLOW : 'rgba(255,255,255,0.15)'}`, background: 'transparent', color: presented[cat.id] ? YELLOW : 'rgba(255,255,255,0.35)', cursor: 'pointer', fontWeight: presented[cat.id] ? 700 : 400 }}>
-                  {presented[cat.id] ? '✓ done' : 'mark done'}
+                <span style={{ fontSize: 14, fontWeight: 600, color: 'rgba(255,255,255,0.9)' }}>{group.label}</span>
+                <button onClick={() => togglePresented(group)}
+                  style={{ fontSize: 11, padding: '4px 12px', borderRadius: 10, border: `1px solid ${presented[group.id] ? YELLOW : 'rgba(255,255,255,0.15)'}`, background: 'transparent', color: presented[group.id] ? YELLOW : 'rgba(255,255,255,0.35)', cursor: 'pointer', fontWeight: presented[group.id] ? 700 : 400 }}>
+                  {presented[group.id] ? '✓ done' : 'mark done'}
                 </button>
               </div>
+
               <div style={{ padding: '10px 16px', display: 'flex', flexDirection: 'column', gap: 6 }}>
-                {Array.from({ length: cat.places }, (_, idx) => idx + 1).map(place => (
+                {Array.from({ length: group.places }, (_, i) => i + 1).map(place => (
                   <div key={place} style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-                    {cat.places > 1 && (
-                      <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.3)', minWidth: 14, flexShrink: 0 }}>{place}</span>
+                    {group.places > 1 && (
+                      <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.3)', minWidth: 24, flexShrink: 0 }}>{PLACE_LABEL[place - 1]}</span>
                     )}
                     <input
-                      value={entries[`${cat.id}_${place}_name`] || ''}
-                      onChange={e => save(cat.id, place, 'name', e.target.value)}
-                      placeholder={cat.places > 1 ? `${place === 1 ? '1st' : place === 2 ? '2nd' : '3rd'} — name` : 'Name'}
+                      value={entries[`${group.id}_${place}_name`] || ''}
+                      onChange={e => save(group.id, place, 'name', e.target.value)}
+                      placeholder="Name"
                       style={{ flex: 2, background: 'rgba(255,255,255,0.07)', border: '1px solid rgba(255,255,255,0.12)', borderRadius: 8, padding: '7px 10px', fontSize: 13, color: '#fff', outline: 'none', fontFamily: 'inherit', minWidth: 0 }}
                     />
-                    {activeSection.type !== 'spot' && (
+                    {!isSpot && (
                       <TimeInput
-                        value={entries[`${cat.id}_${place}_time`] || ''}
-                        onChange={v => save(cat.id, place, 'time', v)}
+                        value={entries[`${group.id}_${place}_time`] || ''}
+                        onChange={v => save(group.id, place, 'time', v)}
                       />
                     )}
                   </div>

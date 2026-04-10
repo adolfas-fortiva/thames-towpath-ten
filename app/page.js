@@ -2,25 +2,27 @@
 import { useState } from 'react'
 import dynamic from 'next/dynamic'
 
-const ZonesTab      = dynamic(() => import('./components/ZonesTab'))
-const FieldTab      = dynamic(() => import('./components/FieldTab'))
-const SuppliersTab  = dynamic(() => import('./components/SuppliersTab'))
-const PrizesTab     = dynamic(() => import('./components/PrizesTab'))
+const ZonesTab       = dynamic(() => import('./components/ZonesTab'))
+const FieldTab       = dynamic(() => import('./components/FieldTab'))
+const SuppliersTab   = dynamic(() => import('./components/SuppliersTab'))
+const PrizesTab      = dynamic(() => import('./components/PrizesTab'))
 const MileMarkersTab = dynamic(() => import('./components/MileMarkersTab'))
-const InspectionTab = dynamic(() => import('./components/InspectionTab'))
-const SOSTab        = dynamic(() => import('./components/SOSTab'))
+const InspectionTab  = dynamic(() => import('./components/InspectionTab'))
+const SOSTab         = dynamic(() => import('./components/SOSTab'))
+const VolunteersTab  = dynamic(() => import('./components/VolunteersTab'))
 
 const YELLOW = '#FECB00'
 const NAVY   = '#1B2869'
 
 const TABS = [
-  { id: 'zones',    label: 'Zones',     Component: ZonesTab },
-  { id: 'field',    label: 'Field',     Component: FieldTab },
-  { id: 'suppliers',label: 'Suppliers', Component: SuppliersTab },
-  { id: 'prizes',   label: 'Prizes',    Component: PrizesTab },
-  { id: 'miles',    label: 'Miles',     Component: MileMarkersTab },
-  { id: 'inspect',  label: 'Inspect',   Component: InspectionTab },
-  { id: 'sos',      label: 'SOS',       Component: SOSTab },
+  { id: 'zones',     label: 'Zones',      Component: ZonesTab },
+  { id: 'field',     label: 'Field',      Component: FieldTab },
+  { id: 'suppliers', label: 'Suppliers',  Component: SuppliersTab },
+  { id: 'prizes',    label: 'Prizes',     Component: PrizesTab },
+  { id: 'miles',     label: 'Miles',      Component: MileMarkersTab },
+  { id: 'inspect',   label: 'Inspect',    Component: InspectionTab },
+  { id: 'sos',       label: 'SOS',        Component: SOSTab },
+  { id: 'volunteers',label: 'Volunteers', Component: VolunteersTab },
 ]
 
 export default function Page() {
@@ -43,14 +45,13 @@ export default function Page() {
             <button key={t.id} onClick={() => setTab(t.id)} style={{
               flex: 1, padding: '10px 4px', border: 'none', background: 'transparent',
               color: tab === t.id ? YELLOW : 'rgba(255,255,255,0.35)',
-              cursor: 'pointer', fontSize: 12, fontWeight: tab === t.id ? 700 : 400,
+              cursor: 'pointer', fontSize: 11, fontWeight: tab === t.id ? 700 : 400,
               borderBottom: tab === t.id ? `2px solid ${YELLOW}` : '2px solid transparent',
               transition: 'all 0.15s', whiteSpace: 'nowrap', minWidth: 0, flexShrink: 1,
             }}>{t.label}</button>
           ))}
         </div>
       </div>
-
       <div style={{ padding: 16 }}>
         {active && <active.Component />}
       </div>

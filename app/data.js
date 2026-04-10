@@ -171,3 +171,37 @@ export const MILE_MARKERS = [
   { id: 'MM8', label: 'Mile 8', notes: 'Kingston turning point / return' },
   { id: 'MM9', label: 'Mile 9', notes: 'Final mile — approach to finish' },
 ]
+// Restructured prize categories — Individual grouped by Men/Women with 1/2/3 each
+export const PRIZE_CATEGORIES_V2 = [
+  {
+    section: 'Individual',
+    timing: '~10:00',
+    note: 'One runner, one prize. Overall position takes priority over age category.',
+    groups: [
+      { id: 'men',   label: 'Men',   places: 3 },
+      { id: 'women', label: 'Women', places: 3 },
+    ]
+  },
+  {
+    section: 'Age Categories',
+    timing: '~11:00',
+    note: '1st, 2nd and 3rd per category',
+    groups: [
+      { id: 'f3544', label: 'F35–44', places: 3 },
+      { id: 'f4554', label: 'F45–54', places: 3 },
+      { id: 'f55',   label: 'F55+',   places: 3 },
+      { id: 'm4049', label: 'M40–49', places: 3 },
+      { id: 'm5059', label: 'M50–59', places: 3 },
+      { id: 'm60',   label: 'M60+',   places: 3 },
+    ]
+  },
+  {
+    section: 'Spot Prizes',
+    timing: null,
+    note: 'Name only',
+    groups: [
+      { id: 'spot1', label: 'Spot Prize 1', places: 1 },
+      { id: 'spot2', label: 'Spot Prize 2', places: 1 },
+    ]
+  }
+]

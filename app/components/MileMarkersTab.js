@@ -2,135 +2,143 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../supabase'
 import { MILE_MARKERS } from '../data'
-import { Card, SectionHead, Pill, Tick, SwapDropdown, YELLOW, CYAN, inputStyle } from './ui'
-
-const SETUP_TEAM = [
-  { name: 'Adolfas Kupliauskas', phone: '07568361153' },
-  { name: 'Robert Hutchinson', phone: '07720402420' },
-]
-const SUNDAY_TEAM = [
-  { name: 'Nick Lines', phone: '07808935585' },
-]
-const ALL_CHECKERS = [...SETUP_TEAM, ...SUNDAY_TEAM]
+import { Card, SectionHead, Tick, YELLOW, CYAN, NAVY, inputStyle, selectStyle } from './ui'
 
 export default function MileMarkersTab() {
-  const [view, setView]         = useState('setup')
-  const [markerData, setMarkerData] = useState({})
-  const [swapping, setSwapping] = useState({})
+  const [volunteers,  setVolunteers]  = useState([])
+  const [checkers,    setCheckers]    = useState({ c1: '', c2: '' })
+  const [markerData,  setMarkerData]  = useState({})
+  const [editW3w,     setEditW3w]     = useState({})
 
   useEffect(() => {
+    supabase.from('volunteers').select('id,name,phone').order('name').then(({ data }) => { if (data) setVolunteers(data) })
+
+    supabase.from('event_config').select('*').in('key', ['mile_checker_1', 'mile_checker_2']).then(({ data }) => {
+      if (!data) return
+      const c = {}
+      data.forEach(r => { if (r.key === 'mile_checker_1') c.c1 = r.value; if (r.key === 'mile_checker_2') c.c2 = r.value })
+      setCheckers(c)
+    })
+
     supabase.from('mile_markers').select('*').then(({ data }) => {
       if (!data) return
       const map = {}
       data.forEach(r => { map[r.marker_id] = r })
       setMarkerData(map)
     })
-    const ch = supabase.channel('mile_markers_ch')
+
+    const ch = supabase.channel('miles_ch')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'mile_markers' }, ({ new: r }) => {
         setMarkerData(prev => ({ ...prev, [r.marker_id]: r }))
       }).subscribe()
     return () => supabase.removeChannel(ch)
   }, [])
 
-  const upsert = async (id, patch) => {
-    const existing = markerData[id] || {}
-    const updated  = { marker_id: id, ...existing, ...patch }
+  const setChecker = async (key, dbKey, value) => {
+    setCheckers(prev => ({ ...prev, [key]: value }))
+    await supabase.from('event_config').upsert({ key: dbKey, value }, { onConflict: 'key' })
+  }
+
+  const toggleDone = async (id) => {
+    const cur = markerData[id]?.sunday_done || false
+    const updated = { ...(markerData[id] || {}), marker_id: id, sunday_done: !cur }
     setMarkerData(prev => ({ ...prev, [id]: updated }))
     await supabase.from('mile_markers').upsert(updated, { onConflict: 'marker_id' })
   }
 
-  const toggleDone = async (id, phase) => {
-    const field = phase === 'setup' ? 'setup_done' : 'sunday_done'
-    const cur   = markerData[id]?.[field] || false
-    await upsert(id, { [field]: !cur })
-  }
-
-  const saveBy = async (id, phase, name) => {
-    const field = phase === 'setup' ? 'setup_by' : 'sunday_by'
-    await upsert(id, { [field]: name })
-    setSwapping(prev => ({ ...prev, [`${id}_${phase}`]: false }))
-  }
-
   const saveW3w = async (id, val) => {
-    await upsert(id, { w3w: val })
+    const clean = val.trim().replace(/^\/+/, '')
+    const updated = { ...(markerData[id] || {}), marker_id: id, w3w: clean }
+    setMarkerData(prev => ({ ...prev, [id]: updated }))
+    setEditW3w(prev => ({ ...prev, [id]: false }))
+    await supabase.from('mile_markers').upsert(updated, { onConflict: 'marker_id' })
   }
 
-  const doneField = view === 'setup' ? 'setup_done' : 'sunday_done'
-  const byField   = view === 'setup' ? 'setup_by'   : 'sunday_by'
-  const doneCount = MILE_MARKERS.filter(m => markerData[m.id]?.[doneField]).length
-  const defaultTeam = view === 'setup' ? SETUP_TEAM : SUNDAY_TEAM
+  const doneCount = MILE_MARKERS.filter(m => markerData[m.id]?.sunday_done).length
 
   return (
     <div>
-      <Card style={{ marginBottom: 12 }}>
-        <SectionHead title="Mile markers" right={`${doneCount} / ${MILE_MARKERS.length}`} />
+      {/* Assigned checkers */}
+      <Card style={{ marginBottom: 14 }}>
+        <SectionHead title="Sunday checkers" right="verify before race start" />
+        <div style={{ padding: '12px 16px', display: 'flex', flexDirection: 'column', gap: 8 }}>
+          {[
+            { key: 'c1', dbKey: 'mile_checker_1', label: 'Checker 1' },
+            { key: 'c2', dbKey: 'mile_checker_2', label: 'Checker 2' },
+          ].map(slot => {
+            const selected = volunteers.find(v => v.name === checkers[slot.key])
+            return (
+              <div key={slot.key} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.4)', minWidth: 64 }}>{slot.label}</div>
+                <select value={checkers[slot.key] || ''} onChange={e => setChecker(slot.key, slot.dbKey, e.target.value)}
+                  style={{ ...selectStyle, flex: 1 }}>
+                  <option value="">— assign —</option>
+                  {volunteers.map(v => <option key={v.id} value={v.name}>{v.name} · {v.phone}</option>)}
+                </select>
+                {selected && (
+                  <a href={`tel:${selected.phone}`} style={{ color: CYAN, fontSize: 13, fontWeight: 600, textDecoration: 'none', flexShrink: 0 }}>{selected.phone}</a>
+                )}
+              </div>
+            )
+          })}
+        </div>
+        <div style={{ padding: '0 16px 12px', fontSize: 12, color: 'rgba(255,255,255,0.3)' }}>
+          Setup Saturday: Adolfas Kupliauskas + Robert Hutchinson
+        </div>
+      </Card>
+
+      {/* Progress */}
+      <Card style={{ marginBottom: 14 }}>
+        <SectionHead title="Sunday check" right={`${doneCount} / ${MILE_MARKERS.length}`} />
         <div style={{ padding: '10px 16px 14px' }}>
           <div style={{ display: 'flex', gap: 3 }}>
             {MILE_MARKERS.map(m => (
-              <div key={m.id} style={{ flex: 1, height: 5, borderRadius: 3, background: markerData[m.id]?.[doneField] ? YELLOW : 'rgba(255,255,255,0.1)' }} />
+              <div key={m.id} style={{ flex: 1, height: 5, borderRadius: 3, background: markerData[m.id]?.sunday_done ? YELLOW : 'rgba(255,255,255,0.1)' }} />
             ))}
           </div>
         </div>
       </Card>
 
-      <div style={{ display: 'flex', gap: 6, marginBottom: 14 }}>
-        <Pill active={view === 'setup'}  onClick={() => setView('setup')}>Setup — Saturday</Pill>
-        <Pill active={view === 'sunday'} onClick={() => setView('sunday')}>Check — Sunday</Pill>
-      </div>
+      {/* Markers list */}
+      <Card>
+        {MILE_MARKERS.map((m, i) => {
+          const d       = markerData[m.id] || {}
+          const isDone  = d.sunday_done || false
+          const w3w     = d.w3w
+          const isEditW = editW3w[m.id]
+          const isLast  = i === MILE_MARKERS.length - 1
 
-      <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.35)', marginBottom: 10, paddingLeft: 4 }}>
-        {view === 'setup'
-          ? 'Adolfas + Robert Hutchinson — place markers Saturday'
-          : 'Nick Lines — verify all markers are in place before race start'}
-      </div>
-
-      {MILE_MARKERS.map((m, i) => {
-        const d        = markerData[m.id] || {}
-        const isDone   = d[doneField] || false
-        const byName   = d[byField] || ''
-        const swapKey  = `${m.id}_${view}`
-        const isSwap   = swapping[swapKey]
-
-        return (
-          <Card key={m.id} style={{ borderLeft: isDone ? `3px solid ${YELLOW}` : undefined }}>
-            <div style={{ display: 'flex', alignItems: 'center', padding: '12px 16px', gap: 10 }}>
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
-                  <span style={{ fontSize: 11, fontWeight: 700, color: '#1B2869', background: YELLOW, borderRadius: 4, padding: '2px 8px', flexShrink: 0 }}>{m.label}</span>
-                  {byName && <span style={{ fontSize: 12, color: 'rgba(255,255,255,0.4)' }}>by {byName}</span>}
-                </div>
-                {d.w3w
-                  ? <a href={`https://w3w.co/${d.w3w}`} target="_blank" rel="noopener noreferrer" style={{ fontSize: 12, color: '#e74c3c', display: 'block' }}>///{d.w3w}</a>
-                  : <input
+          return (
+            <div key={m.id} style={{ borderBottom: isLast ? 'none' : '1px solid rgba(255,255,255,0.07)', opacity: isDone ? 0.4 : 1 }}>
+              <div style={{ display: 'flex', alignItems: 'center', padding: '12px 16px', gap: 12 }}>
+                <span style={{ fontSize: 12, fontWeight: 700, color: NAVY, background: YELLOW, borderRadius: 4, padding: '3px 8px', flexShrink: 0 }}>{m.label}</span>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  {w3w && !isEditW ? (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <a href={`https://w3w.co/${w3w}`} target="_blank" rel="noopener noreferrer"
+                        style={{ fontSize: 13, color: '#e74c3c', textDecoration: 'none', fontWeight: 500 }}>
+                        ///{w3w}
+                      </a>
+                      <button onClick={() => setEditW3w(prev => ({ ...prev, [m.id]: true }))}
+                        style={{ fontSize: 10, color: 'rgba(255,255,255,0.25)', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>edit</button>
+                    </div>
+                  ) : (
+                    <input
+                      autoFocus={isEditW}
+                      defaultValue={w3w || ''}
                       placeholder="///what.three.words"
-                      defaultValue={d.w3w || ''}
-                      onBlur={e => saveW3w(m.id, e.target.value.replace(/^\/+/, ''))}
-                      style={{ ...inputStyle, fontSize: 12, padding: '4px 8px', marginTop: 2 }}
+                      onBlur={e => { if (e.target.value.trim()) saveW3w(m.id, e.target.value); else setEditW3w(prev => ({ ...prev, [m.id]: false })) }}
+                      style={{ ...inputStyle, fontSize: 12, padding: '5px 8px' }}
                     />
-                }
-                {m.notes && <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.3)', marginTop: 3 }}>{m.notes}</div>}
-              </div>
-              <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexShrink: 0 }}>
-                <button onClick={() => setSwapping(prev => ({ ...prev, [swapKey]: !prev[swapKey] }))}
-                  style={{ fontSize: 11, color: isSwap ? YELLOW : 'rgba(255,255,255,0.35)', background: 'none', border: '1px solid rgba(255,255,255,0.15)', borderRadius: 6, padding: '3px 8px', cursor: 'pointer' }}>
-                  {byName ? byName.split(' ')[0] : 'assign'}
-                </button>
-                <Tick done={isDone} onClick={() => toggleDone(m.id, view)} />
+                  )}
+                  {m.notes && <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.25)', marginTop: 2 }}>{m.notes}</div>}
+                </div>
+                <Tick done={isDone} onClick={() => toggleDone(m.id)} />
               </div>
             </div>
-
-            {isSwap && (
-              <SwapDropdown
-                currentName={byName || ''}
-                allVolunteers={ALL_CHECKERS}
-                usedNames={[]}
-                onSave={name => saveBy(m.id, view, name)}
-                onCancel={() => setSwapping(prev => ({ ...prev, [swapKey]: false }))}
-              />
-            )}
-          </Card>
-        )
-      })}
+          )
+        })}
+      </Card>
     </div>
   )
 }
