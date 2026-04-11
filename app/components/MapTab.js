@@ -178,9 +178,10 @@ export default function MapTab() {
   const [routeColor,  setRouteColor]  = useState(ROUTE_COLORS[0].color)
   const [routeLabel,  setRouteLabel]  = useState('Route')
   const [editId,      setEditId]      = useState(null)
+  const [zoneInspect, setZoneInspect] = useState(null) // { zone, items }
   const [zonePoints,  setZonePoints]  = useState([])
   const [zoneColor,   setZoneColor]   = useState('#22c55e')
-  const [zoneLabel,   setZoneLabel]   = useState('Zone')
+  const [zoneLabel,   setZoneLabel]   = useState('')
   const zoneLineRef  = useRef(null)
   const zonePolyRef  = useRef(null)
   const [sideTab,     setSideTab]     = useState('place')
@@ -209,7 +210,7 @@ export default function MapTab() {
     loadData()
     if (window.google?.maps) { setLoaded(true); return }
     const s = document.createElement('script')
-    s.src = `https://maps.googleapis.com/maps/api/js?key=${process.env.NEXT_PUBLIC_GOOGLE_MAPS_KEY}`
+    s.src = `https://maps.googleapis.com/maps/api/js?key=${process.env.NEXT_PUBLIC_GOOGLE_MAPS_KEY}&libraries=geometry`
     s.async = true; s.onload = () => setLoaded(true)
     document.head.appendChild(s)
   }, [loadData])
@@ -258,7 +259,8 @@ export default function MapTab() {
 
     zones.forEach(zn => {
       if (!zn.points?.length) return
-      const poly = new window.google.maps.Polygon({
+      const G = window.google.maps
+      const poly = new G.Polygon({
         paths: zn.points, map,
         fillColor: zn.color, fillOpacity: 0.12,
         strokeColor: zn.color, strokeWeight: 2, strokeOpacity: 0.7,
@@ -267,11 +269,43 @@ export default function MapTab() {
       poly.addListener('mouseover', (e) => {
         poly.setOptions({ fillOpacity: 0.55 })
         iw.setContent(`<div style="font-family:sans-serif;padding:2px 6px;font-weight:700;color:${zn.color};font-size:14px">${zn.label}</div>`)
-        iw.setPosition(e.latLng)
-        iw.open(map)
+        iw.setPosition(e.latLng); iw.open(map)
       })
       poly.addListener('mouseout', () => { poly.setOptions({ fillOpacity: 0.12 }); iw.close() })
-      renderedRef.current[`zn_${zn.id}`] = { remove: () => poly.setMap(null) }
+
+      // Click → find all overlays inside this zone
+      poly.addListener('click', () => {
+        const gmPoly = new G.Polygon({ paths: zn.points })
+        const inside = overlays.filter(ov => {
+          try { return window.google.maps.geometry.poly.containsLocation(new G.LatLng(ov.lat, ov.lng), gmPoly) }
+          catch { return false }
+        })
+        setZoneInspect({ zone: zn, items: inside })
+        gmPoly.setMap(null)
+      })
+
+      // Vertex edit handles — draggable dots at each corner
+      const vHandles = zn.points.map((pt, vi) => {
+        const h = new G.Marker({
+          position: pt, map,
+          icon: { path: G.SymbolPath.CIRCLE, scale: 5, fillColor: zn.color, fillOpacity: 1, strokeColor: '#fff', strokeWeight: 1.5 },
+          draggable: true, zIndex: 15, cursor: 'pointer',
+        })
+        h.addListener('drag', async (e) => {
+          const newPts = [...zn.points]
+          newPts[vi] = { lat: e.latLng.lat(), lng: e.latLng.lng() }
+          poly.setPaths(newPts)
+        })
+        h.addListener('dragend', async (e) => {
+          const newPts = [...zn.points]
+          newPts[vi] = { lat: e.latLng.lat(), lng: e.latLng.lng() }
+          await supabase.from('map_zones').update({ points: newPts }).eq('id', zn.id)
+          setZones(prev => prev.map(z => z.id === zn.id ? { ...z, points: newPts } : z))
+        })
+        return h
+      })
+
+      renderedRef.current[`zn_${zn.id}`] = { remove: () => { poly.setMap(null); vHandles.forEach(h => h.setMap(null)) } }
     })
   }, [overlays, routes, zones, assignments, loaded, handleStateChange])
 
@@ -605,11 +639,48 @@ export default function MapTab() {
         {mode !== 'view' && (
           <div style={{ position: 'absolute', top: 10, left: '50%', transform: 'translateX(-50%)', background: YELLOW, color: NAVY, fontWeight: 700, fontSize: 12, padding: '6px 14px', borderRadius: 20, pointerEvents: 'none', whiteSpace: 'nowrap' }}>
             {mode === 'place' ? (form.label.trim() ? `Click to place: ${form.label}` : 'Enter a name first')
-              : mode === 'zone' ? (zoneLabel || 'Zone')
+              : mode === 'zone' ? (zoneLabel.trim() || 'Name your zone in sidebar')
               : `Drawing route: ${routeLabel} — ${routePoints.length} pts`}
           </div>
         )}
       </div>
+
+      {/* ── Zone inspect panel ── */}
+      {zoneInspect && (
+        <div style={{ position: 'fixed', top: 0, right: editOverlay ? 310 : 0, bottom: 0, width: 280, background: '#111e50', borderLeft: '1px solid rgba(255,255,255,0.12)', zIndex: 290, display: 'flex', flexDirection: 'column', fontFamily: '-apple-system, sans-serif', overflowY: 'auto' }}>
+          <div style={{ padding: '12px 14px', borderBottom: '1px solid rgba(255,255,255,0.08)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'rgba(0,0,0,0.2)', position: 'sticky', top: 0 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <div style={{ width: 10, height: 10, borderRadius: 2, background: zoneInspect.zone.color }} />
+              <div style={{ fontSize: 14, fontWeight: 700, color: '#fff' }}>{zoneInspect.zone.label}</div>
+            </div>
+            <button onClick={() => setZoneInspect(null)} style={{ background: 'none', border: 'none', color: 'rgba(255,255,255,0.4)', cursor: 'pointer', fontSize: 20, lineHeight: 1 }}>×</button>
+          </div>
+          <div style={{ padding: 14 }}>
+            <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.35)', marginBottom: 10 }}>{zoneInspect.items.length} item{zoneInspect.items.length !== 1 ? 's' : ''} in this zone</div>
+            {zoneInspect.items.length === 0 && <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.25)', fontStyle: 'italic' }}>No items placed in this zone yet</div>}
+            {zoneInspect.items.map(item => {
+              const ic = (typeof ICONS !== 'undefined' ? ICONS : {})[item.icon] || { emoji: '📌' }
+              const roleKey = `MAP_${item.id}`
+              const vols = assignments[roleKey] || []
+              return (
+                <div key={item.id} style={{ marginBottom: 10, padding: '10px 12px', background: 'rgba(255,255,255,0.05)', borderRadius: 10, border: '1px solid rgba(255,255,255,0.08)' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+                    <span style={{ fontSize: 14 }}>{ic.emoji}</span>
+                    <span style={{ fontSize: 13, fontWeight: 600, color: '#fff' }}>{item.label}</span>
+                  </div>
+                  {item.w3w && <a href={`https://w3w.co/${item.w3w}`} target="_blank" rel="noopener noreferrer" style={{ fontSize: 11, color: '#e74c3c', display: 'block', marginBottom: 4 }}>///{item.w3w}</a>}
+                  {vols.map(v => (
+                    <div key={v.id} style={{ fontSize: 11, color: 'rgba(255,255,255,0.6)', marginTop: 2 }}>
+                      {v.is_lead ? '★ ' : ''}{v.volunteer_name}{v.volunteer_phone ? <a href={`tel:${v.volunteer_phone}`} style={{ color: '#FECB00', marginLeft: 4 }}>{v.volunteer_phone}</a> : ''}
+                    </div>
+                  ))}
+                  {item.notes && <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.3)', marginTop: 4, lineHeight: 1.4 }}>{item.notes.slice(0, 120)}{item.notes.length > 120 ? '…' : ''}</div>}
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      )}
 
       {/* ── Edit panel ── */}
       {editOverlay && (
