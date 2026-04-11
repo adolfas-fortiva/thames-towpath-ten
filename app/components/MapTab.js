@@ -170,6 +170,7 @@ export default function MapTab() {
   const [overlays,    setOverlays]    = useState([])
   const [assignments, setAssignments] = useState({})
   const [routes,      setRoutes]      = useState([])
+  const [zones,       setZones]       = useState([])
   const [loaded,      setLoaded]      = useState(false)
   const [mode,        setMode]        = useState('view')
   const [form,        setForm]        = useState(DEFAULT_FORM)
@@ -177,19 +178,26 @@ export default function MapTab() {
   const [routeColor,  setRouteColor]  = useState(ROUTE_COLORS[0].color)
   const [routeLabel,  setRouteLabel]  = useState('Route')
   const [editId,      setEditId]      = useState(null)
+  const [zonePoints,  setZonePoints]  = useState([])
+  const [zoneColor,   setZoneColor]   = useState('#22c55e')
+  const [zoneLabel,   setZoneLabel]   = useState('Zone')
+  const zoneLineRef  = useRef(null)
+  const zonePolyRef  = useRef(null)
   const [sideTab,     setSideTab]     = useState('place')
   const [sideOpen,    setSideOpen]    = useState(true)
 
   const editOverlay = editId ? overlays.find(o => o.id === editId) : null
 
   const loadData = useCallback(async () => {
-    const [{ data: ovs }, { data: rts }, { data: asgn }] = await Promise.all([
+    const [{ data: ovs }, { data: rts }, { data: asgn }, { data: zns }] = await Promise.all([
       supabase.from('map_overlays').select('*').order('sort_order'),
       supabase.from('map_routes').select('*'),
       supabase.from('role_assignments').select('*').like('role_id', 'MAP_%'),
+      supabase.from('map_zones').select('*'),
     ])
     if (ovs) setOverlays(ovs)
     if (rts) setRoutes(rts)
+    if (zns) setZones(zns)
     if (asgn) {
       const map = {}
       asgn.forEach(r => { if (!map[r.role_id]) map[r.role_id] = []; map[r.role_id].push(r) })
@@ -247,7 +255,25 @@ export default function MapTab() {
       })
       renderedRef.current[`rt_${rt.id}`] = { remove: () => line.setMap(null) }
     })
-  }, [overlays, routes, assignments, loaded, handleStateChange])
+
+    zones.forEach(zn => {
+      if (!zn.points?.length) return
+      const poly = new window.google.maps.Polygon({
+        paths: zn.points, map,
+        fillColor: zn.color, fillOpacity: 0.12,
+        strokeColor: zn.color, strokeWeight: 2, strokeOpacity: 0.7,
+      })
+      const iw = infoWinRef.current
+      poly.addListener('mouseover', (e) => {
+        poly.setOptions({ fillOpacity: 0.35 })
+        iw.setContent(`<div style="font-family:sans-serif;padding:2px 6px;font-weight:700;color:${zn.color};font-size:14px">${zn.label}</div>`)
+        iw.setPosition(e.latLng)
+        iw.open(map)
+      })
+      poly.addListener('mouseout', () => { poly.setOptions({ fillOpacity: 0.12 }); iw.close() })
+      renderedRef.current[`zn_${zn.id}`] = { remove: () => poly.setMap(null) }
+    })
+  }, [overlays, routes, zones, assignments, loaded, handleStateChange])
 
   // Place mode
   useEffect(() => {
@@ -285,6 +311,59 @@ export default function MapTab() {
     })
     return () => window.google.maps.event.removeListener(listener)
   }, [mode, routeColor])
+
+  // Zone drawing mode
+  useEffect(() => {
+    if (!mapObjRef.current || mode !== 'zone') return
+    const listener = mapObjRef.current.addListener('click', (e) => {
+      const pt = { lat: e.latLng.lat(), lng: e.latLng.lng() }
+      setZonePoints(prev => {
+        const next = [...prev, pt]
+        if (zoneLineRef.current) zoneLineRef.current.setMap(null)
+        // Draw preview as closed polygon
+        zoneLineRef.current = new window.google.maps.Polygon({
+          paths: next, map: mapObjRef.current,
+          fillColor: zoneColor, fillOpacity: 0.2,
+          strokeColor: zoneColor, strokeWeight: 2, strokeOpacity: 0.8,
+        })
+        return next
+      })
+    })
+    return () => window.google.maps.event.removeListener(listener)
+  }, [mode, zoneColor])
+
+  const saveZone = async () => {
+    if (zonePoints.length < 3) return
+    const { data } = await supabase.from('map_zones').insert({ label: zoneLabel, color: zoneColor, points: zonePoints }).select().single()
+    if (data) setZones(prev => [...prev, data])
+    if (zoneLineRef.current) { zoneLineRef.current.setMap(null); zoneLineRef.current = null }
+    setZonePoints([]); setMode('view')
+  }
+
+  const cancelZone = () => {
+    if (zoneLineRef.current) { zoneLineRef.current.setMap(null); zoneLineRef.current = null }
+    setZonePoints([]); setMode('view')
+  }
+
+  const deleteZone = async (id) => {
+    await supabase.from('map_zones').delete().eq('id', id)
+    setZones(prev => prev.filter(z => z.id !== id))
+  }
+
+  const undoZone = () => {
+    setZonePoints(prev => {
+      const next = prev.slice(0, -1)
+      if (zoneLineRef.current) zoneLineRef.current.setMap(null)
+      if (next.length >= 2) {
+        zoneLineRef.current = new window.google.maps.Polygon({
+          paths: next, map: mapObjRef.current,
+          fillColor: zoneColor, fillOpacity: 0.2,
+          strokeColor: zoneColor, strokeWeight: 2, strokeOpacity: 0.8,
+        })
+      } else { zoneLineRef.current = null }
+      return next
+    })
+  }
 
   const undoRoute = () => {
     setRoutePoints(prev => {
@@ -356,8 +435,8 @@ export default function MapTab() {
           <div style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.12)', borderRadius: 10, padding: '8px 10px' }}>
             <div style={{ fontSize: 9, fontWeight: 700, color: 'rgba(255,255,255,0.3)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 6 }}>Mode</div>
             <div style={{ display: 'flex', gap: 4 }}>
-              {[['view','View'],['place','Place'],['route','Route']].map(([m, lbl]) => (
-                <button key={m} onClick={() => { setMode(m); if (m !== 'route') cancelRoute(); if (m !== 'view') setEditId(null) }}
+              {[['view','View'],['place','Place'],['route','Route'],['zone','Zone']].map(([m, lbl]) => (
+                <button key={m} onClick={() => { setMode(m); if (m !== 'route') cancelRoute(); if (m !== 'zone') cancelZone(); if (m !== 'view') setEditId(null) }}
                   style={{ flex: 1, padding: '6px 3px', borderRadius: 6, border: `1px solid ${mode === m ? YELLOW : 'rgba(255,255,255,0.12)'}`, background: mode === m ? YELLOW : 'transparent', color: mode === m ? NAVY : 'rgba(255,255,255,0.5)', cursor: 'pointer', fontSize: 10, fontWeight: mode === m ? 700 : 400 }}>
                   {lbl}
                 </button>
@@ -365,8 +444,8 @@ export default function MapTab() {
             </div>
           </div>
 
-          <div style={{ display: 'flex', gap: 3 }}>
-            {['place','route','items'].map(t => (
+          <div style={{ display: 'flex', gap: 3, flexWrap: 'wrap' }}>
+            {['place','route','zone','items'].map(t => (
               <button key={t} onClick={() => setSideTab(t)}
                 style={{ flex: 1, padding: '4px 2px', borderRadius: 6, border: `1px solid ${sideTab === t ? YELLOW : 'rgba(255,255,255,0.12)'}`, background: sideTab === t ? YELLOW : 'transparent', color: sideTab === t ? NAVY : 'rgba(255,255,255,0.4)', fontSize: 9, fontWeight: sideTab === t ? 700 : 400, cursor: 'pointer', textTransform: 'capitalize' }}>
                 {t === 'items' ? 'On map' : t}
@@ -462,6 +541,44 @@ export default function MapTab() {
             </div>
           )}
 
+          {/* Zone panel */}
+          {sideTab === 'zone' && (
+            <div style={{ background: 'rgba(255,255,255,0.06)', border: `1px solid ${mode === 'zone' ? YELLOW : 'rgba(255,255,255,0.12)'}`, borderRadius: 10, padding: '8px 10px', display: 'flex', flexDirection: 'column', gap: 7, overflowY: 'auto' }}>
+              <div style={{ fontSize: 9, fontWeight: 700, color: mode === 'zone' ? YELLOW : 'rgba(255,255,255,0.3)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>Zone area</div>
+              <input value={zoneLabel} onChange={e => setZoneLabel(e.target.value)} placeholder="Zone name" style={iS} />
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+                {[['#22c55e','Field'],['#3b82f6','Richmond'],['#f97316','Ham'],['#a855f7','Kingston'],['#ec4899','Custom']].map(([c, lbl]) => (
+                  <button key={c} onClick={() => setZoneColor(c)}
+                    style={{ padding: '3px 7px', borderRadius: 4, border: `2px solid ${zoneColor === c ? '#fff' : 'transparent'}`, background: c, fontSize: 9, color: '#fff', cursor: 'pointer', fontWeight: 700 }}>
+                    {lbl}
+                  </button>
+                ))}
+                <input type="color" value={zoneColor} onChange={e => setZoneColor(e.target.value)} style={{ width: 22, height: 22, borderRadius: 3, border: 'none', cursor: 'pointer', padding: 0 }} />
+              </div>
+              {mode !== 'zone'
+                ? <button onClick={() => setMode('zone')} style={{ padding: 8, borderRadius: 7, background: YELLOW, color: NAVY, border: 'none', fontWeight: 700, fontSize: 11, cursor: 'pointer' }}>Start drawing zone</button>
+                : <>
+                    <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.4)' }}>{zonePoints.length} points — click map to add. Zone closes automatically.</div>
+                    <div style={{ display: 'flex', gap: 4 }}>
+                      <button onClick={undoZone} disabled={!zonePoints.length} style={{ flex: 1, padding: 6, borderRadius: 6, background: 'rgba(255,255,255,0.08)', color: zonePoints.length ? '#fff' : 'rgba(255,255,255,0.25)', border: '1px solid rgba(255,255,255,0.12)', fontSize: 10, cursor: zonePoints.length ? 'pointer' : 'not-allowed' }}>undo</button>
+                      <button onClick={saveZone} disabled={zonePoints.length < 3} style={{ flex: 1, padding: 6, borderRadius: 6, background: zonePoints.length >= 3 ? YELLOW : 'rgba(255,255,255,0.08)', color: zonePoints.length >= 3 ? NAVY : 'rgba(255,255,255,0.25)', border: 'none', fontWeight: 700, fontSize: 10, cursor: zonePoints.length >= 3 ? 'pointer' : 'not-allowed' }}>save</button>
+                      <button onClick={cancelZone} style={{ padding: '6px 7px', borderRadius: 6, background: 'transparent', color: 'rgba(255,255,255,0.35)', border: '1px solid rgba(255,255,255,0.12)', fontSize: 10, cursor: 'pointer' }}>✕</button>
+                    </div>
+                  </>
+              }
+              {zones.length > 0 && <>
+                <div style={{ fontSize: 9, color: 'rgba(255,255,255,0.3)', textTransform: 'uppercase', marginTop: 4 }}>Saved zones</div>
+                {zones.map(z => (
+                  <div key={z.id} style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '4px 5px', background: 'rgba(255,255,255,0.04)', borderRadius: 4 }}>
+                    <div style={{ width: 7, height: 7, borderRadius: 1, background: z.color, flexShrink: 0, border: `1px solid ${z.color}` }} />
+                    <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.6)', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{z.label}</span>
+                    <button onClick={() => deleteZone(z.id)} style={{ fontSize: 12, color: 'rgba(255,255,255,0.2)', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>×</button>
+                  </div>
+                ))}
+              </>}
+            </div>
+          )}
+
           {/* On map list */}
           {sideTab === 'items' && (
             <div style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.12)', borderRadius: 10, padding: '8px 10px', overflowY: 'auto' }}>
@@ -487,7 +604,9 @@ export default function MapTab() {
         <div ref={mapRef} style={{ width: '100%', height: '100%' }} />
         {mode !== 'view' && (
           <div style={{ position: 'absolute', top: 10, left: '50%', transform: 'translateX(-50%)', background: YELLOW, color: NAVY, fontWeight: 700, fontSize: 12, padding: '6px 14px', borderRadius: 20, pointerEvents: 'none', whiteSpace: 'nowrap' }}>
-            {mode === 'place' ? (form.label.trim() ? `Click to place: ${form.label}` : 'Enter a name first') : `Drawing: ${routeLabel} — ${routePoints.length} pts`}
+            {mode === 'place' ? (form.label.trim() ? `Click to place: ${form.label}` : 'Enter a name first')
+              : mode === 'zone' ? `Drawing zone: ${zoneLabel} — ${zonePoints.length} pts (need ≥3)`
+              : `Drawing route: ${routeLabel} — ${routePoints.length} pts`}
           </div>
         )}
       </div>
