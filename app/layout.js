@@ -1,9 +1,14 @@
 import './globals.css'
-export const metadata = { title: 'TTT 2026 — Race Director Portal', description: 'Thames Towpath Ten race day operations' }
+
+export const metadata = {
+  title: 'Thames Towpath Ten — Race Portal',
+  description: 'West 4 Harriers Race Director Portal',
+}
+
 export default function RootLayout({ children }) {
   return (
     <html lang="en">
-      <body>{children}</body>
+      <body style={{ margin: 0, padding: 0, background: '#0c1535' }}>{children}</body>
     </html>
   )
 }

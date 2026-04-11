@@ -1,5 +1,5 @@
 'use client'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import dynamic from 'next/dynamic'
 import ErrorBoundary from './components/ErrorBoundary'
 
@@ -16,7 +16,66 @@ const InventoryTab   = dynamic(() => import('./components/InventoryTab'),    { s
 
 const YELLOW = '#FECB00'
 const NAVY   = '#1B2869'
+const AUTH_KEY = 'ttt_auth'
 
+// ─── LOGIN SCREEN ─────────────────────────────────────────────────────────────
+function LoginScreen({ onAuth }) {
+  const [user, setUser]   = useState('')
+  const [pass, setPass]   = useState('')
+  const [err,  setErr]    = useState(false)
+  const [show, setShow]   = useState(false)
+
+  const attempt = () => {
+    if (user.trim().toLowerCase() === 'ttt' && pass === 'olddearpark2026') {
+      sessionStorage.setItem(AUTH_KEY, '1')
+      onAuth()
+    } else {
+      setErr(true)
+      setTimeout(() => setErr(false), 2000)
+    }
+  }
+
+  const onKey = (e) => { if (e.key === 'Enter') attempt() }
+
+  return (
+    <div style={{ minHeight: '100vh', background: 'linear-gradient(160deg, #0c1535 0%, #111e50 50%, #0c1535 100%)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: 24, fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif' }}>
+      <img src="/logo.png" alt="West 4 Harriers" style={{ width: 90, height: 90, borderRadius: '50%', objectFit: 'contain', background: NAVY, marginBottom: 28 }} />
+      <div style={{ color: '#fff', fontWeight: 700, fontSize: 20, marginBottom: 6, letterSpacing: '-0.5px' }}>Thames Towpath Ten</div>
+      <div style={{ color: 'rgba(255,255,255,0.4)', fontSize: 13, marginBottom: 36 }}>Race Director Portal · 12 April 2026</div>
+
+      <div style={{ width: '100%', maxWidth: 320, display: 'flex', flexDirection: 'column', gap: 12 }}>
+        <input
+          value={user} onChange={e => setUser(e.target.value)} onKeyDown={onKey}
+          placeholder="Username"
+          autoCapitalize="none" autoCorrect="off" spellCheck={false}
+          style={{ background: 'rgba(255,255,255,0.07)', border: `1px solid ${err ? '#ef4444' : 'rgba(255,255,255,0.15)'}`, borderRadius: 10, padding: '13px 16px', fontSize: 15, color: '#fff', outline: 'none', fontFamily: 'inherit', transition: 'border-color 0.2s' }}
+        />
+        <div style={{ position: 'relative' }}>
+          <input
+            value={pass} onChange={e => setPass(e.target.value)} onKeyDown={onKey}
+            placeholder="Password"
+            type={show ? 'text' : 'password'}
+            style={{ background: 'rgba(255,255,255,0.07)', border: `1px solid ${err ? '#ef4444' : 'rgba(255,255,255,0.15)'}`, borderRadius: 10, padding: '13px 48px 13px 16px', fontSize: 15, color: '#fff', outline: 'none', fontFamily: 'inherit', width: '100%', boxSizing: 'border-box', transition: 'border-color 0.2s' }}
+          />
+          <button onClick={() => setShow(s => !s)} style={{ position: 'absolute', right: 14, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', color: 'rgba(255,255,255,0.35)', cursor: 'pointer', fontSize: 12 }}>
+            {show ? 'hide' : 'show'}
+          </button>
+        </div>
+
+        {err && <div style={{ fontSize: 13, color: '#ef4444', textAlign: 'center' }}>Incorrect username or password</div>}
+
+        <button onClick={attempt}
+          style={{ marginTop: 4, padding: 14, borderRadius: 10, background: YELLOW, color: NAVY, border: 'none', fontWeight: 700, fontSize: 15, cursor: 'pointer', transition: 'opacity 0.15s' }}>
+          Sign in
+        </button>
+      </div>
+
+      <div style={{ marginTop: 40, fontSize: 12, color: 'rgba(255,255,255,0.2)' }}>West 4 Harriers · Restricted access</div>
+    </div>
+  )
+}
+
+// ─── PORTAL ───────────────────────────────────────────────────────────────────
 const ROW1 = [
   { id: 'zones',     label: 'Zones',     Component: ZonesTab },
   { id: 'field',     label: 'Field',     Component: FieldTab },
@@ -43,20 +102,22 @@ const TabBtn = ({ t, active, onClick }) => (
   }}>{t.label}</button>
 )
 
-export default function Page() {
+function Portal() {
   const [tab, setTab] = useState('zones')
   const active = ALL_TABS.find(t => t.id === tab)
 
   return (
-    <div style={{
-      maxWidth: 720, margin: '0 auto', minHeight: '100vh',
-      background: 'linear-gradient(160deg, #0c1535 0%, #111e50 50%, #0c1535 100%)',
-      fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
-    }}>
+    <div style={{ maxWidth: 720, margin: '0 auto', minHeight: '100vh', background: 'linear-gradient(160deg, #0c1535 0%, #111e50 50%, #0c1535 100%)', fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif' }}>
       <div style={{ position: 'sticky', top: 0, zIndex: 10, background: 'rgba(12,21,53,0.95)', backdropFilter: 'blur(16px)', WebkitBackdropFilter: 'blur(16px)', borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
-        <div style={{ padding: '12px 16px 8px', display: 'flex', alignItems: 'center', gap: 12 }}>
-          <img src="/logo.png" alt="West 4 Harriers" style={{ width: 40, height: 40, borderRadius: '50%', objectFit: 'contain', background: NAVY, flexShrink: 0 }} />
-          <div style={{ color: '#fff', fontWeight: 700, fontSize: 15, letterSpacing: '-0.3px' }}>Thames Towpath Ten</div>
+        <div style={{ padding: '12px 16px 8px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            <img src="/logo.png" alt="West 4 Harriers" style={{ width: 40, height: 40, borderRadius: '50%', objectFit: 'contain', background: NAVY, flexShrink: 0 }} />
+            <div style={{ color: '#fff', fontWeight: 700, fontSize: 15, letterSpacing: '-0.3px' }}>Thames Towpath Ten</div>
+          </div>
+          <button onClick={() => { sessionStorage.removeItem(AUTH_KEY); window.location.reload() }}
+            style={{ fontSize: 11, color: 'rgba(255,255,255,0.25)', background: 'none', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 6, padding: '4px 10px', cursor: 'pointer' }}>
+            sign out
+          </button>
         </div>
         <div style={{ display: 'flex', borderTop: '1px solid rgba(255,255,255,0.06)' }}>
           {ROW1.map(t => <TabBtn key={t.id} t={t} active={tab === t.id} onClick={() => setTab(t.id)} />)}
@@ -74,4 +135,17 @@ export default function Page() {
       </div>
     </div>
   )
+}
+
+// ─── ROOT ─────────────────────────────────────────────────────────────────────
+export default function Page() {
+  const [authed, setAuthed] = useState(null)
+
+  useEffect(() => {
+    setAuthed(sessionStorage.getItem(AUTH_KEY) === '1')
+  }, [])
+
+  if (authed === null) return null // prevents flash
+  if (!authed) return <LoginScreen onAuth={() => setAuthed(true)} />
+  return <Portal />
 }

@@ -141,7 +141,7 @@ export default function InventoryTab() {
                         type="number"
                         value={check?.quantity_actual ?? ''}
                         onChange={e => setQty(item, e.target.value)}
-                        placeholder={`need ${item.quantity_required}`}
+                        placeholder="qty"
                         style={{ width: 80, background: 'rgba(255,255,255,0.07)', border: '1px solid rgba(255,255,255,0.15)', borderRadius: 6, padding: '4px 8px', fontSize: 12, color: '#fff', outline: 'none' }}
                       />
                       <QtyBadge required={item.quantity_required} actual={check?.quantity_actual} />
