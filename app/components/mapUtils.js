@@ -33,17 +33,66 @@ export const ROUTE_COLORS = [
 
 export const ODP = { lat: 51.4609, lng: -0.3058 }
 
-// Calculate rotated rectangle polygon path from centre + dimensions
+const R = 6371000 // Earth radius metres
+
+// Bearing in radians from point1 to point2
+export function bearing(lat1, lng1, lat2, lng2) {
+  const dL  = (lng2 - lng1) * Math.PI / 180
+  const la1 = lat1 * Math.PI / 180
+  const la2 = lat2 * Math.PI / 180
+  const y   = Math.sin(dL) * Math.cos(la2)
+  const x   = Math.cos(la1) * Math.sin(la2) - Math.sin(la1) * Math.cos(la2) * Math.cos(dL)
+  return Math.atan2(y, x) // radians, 0 = north, clockwise
+}
+
+// Destination point given distance (m) and bearing (radians) from origin
+export function destination(lat, lng, distM, bearingRad) {
+  const d  = distM / R
+  const la = lat * Math.PI / 180
+  const lo = lng * Math.PI / 180
+  const la2 = Math.asin(Math.sin(la) * Math.cos(d) + Math.cos(la) * Math.sin(d) * Math.cos(bearingRad))
+  const lo2 = lo + Math.atan2(Math.sin(bearingRad) * Math.sin(d) * Math.cos(la), Math.cos(d) - Math.sin(la) * Math.sin(la2))
+  return { lat: la2 * 180 / Math.PI, lng: lo2 * 180 / Math.PI }
+}
+
+// Haversine distance in metres between two lat/lng points
+export function distanceM(lat1, lng1, lat2, lng2) {
+  const la1 = lat1 * Math.PI / 180, la2 = lat2 * Math.PI / 180
+  const dLa = la2 - la1, dLo = (lng2 - lng1) * Math.PI / 180
+  const a   = Math.sin(dLa/2)**2 + Math.cos(la1)*Math.cos(la2)*Math.sin(dLo/2)**2
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a))
+}
+
+// Four corners of a rotated rectangle using proper spherical geometry
+// rotDeg: 0 = north, clockwise
 export function getPolygonPath(lat, lng, widthM, heightM, rotDeg) {
-  const R      = 6371000
-  const latRad = lat * Math.PI / 180
-  const dy     = (heightM / 2) / R * (180 / Math.PI)
-  const dx     = (widthM  / 2) / (R * Math.cos(latRad)) * (180 / Math.PI)
-  const rad    = (rotDeg || 0) * Math.PI / 180
-  const cos    = Math.cos(rad)
-  const sin    = Math.sin(rad)
-  return [[-dx,+dy],[+dx,+dy],[+dx,-dy],[-dx,-dy]].map(([x,y]) => ({
-    lat: lat + x * sin + y * cos,
-    lng: lng + x * cos - y * sin,
-  }))
+  const rot = (rotDeg || 0) * Math.PI / 180 // clockwise from north in radians
+  const w2  = widthM  / 2
+  const h2  = heightM / 2
+
+  // Bearing to each corner from centre (clockwise from north)
+  // NW, NE, SE, SW  (w = east/west, h = north/south in local frame)
+  const corners = [
+    { dX: -w2, dY:  h2 }, // NW in local frame
+    { dX:  w2, dY:  h2 }, // NE
+    { dX:  w2, dY: -h2 }, // SE
+    { dX: -w2, dY: -h2 }, // SW
+  ]
+
+  return corners.map(({ dX, dY }) => {
+    const dist    = Math.sqrt(dX*dX + dY*dY)
+    const angle   = Math.atan2(dX, dY) // bearing if unrotated (north = 0)
+    const finalBearing = angle + rot
+    return destination(lat, lng, dist, finalBearing)
+  })
+}
+
+// Position of the rotation handle (12m above centre along current rotation axis)
+export function rotHandlePos(lat, lng, rotDeg) {
+  return destination(lat, lng, 14, (rotDeg || 0) * Math.PI / 180) // 14m north of centre, rotated
+}
+
+// Corner positions for resize handles
+export function cornerPositions(lat, lng, widthM, heightM, rotDeg) {
+  return getPolygonPath(lat, lng, widthM, heightM, rotDeg)
 }
