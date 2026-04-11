@@ -160,6 +160,110 @@ function buildOverlay(map, ov, infoWindow, assignments, onClickEdit, onStateChan
 }
 
 // ─── COMPONENT ────────────────────────────────────────────────────────────────
+// ─── Zone rename inline ───────────────────────────────────────────────────────
+function ZoneRenameInline({ zone, onRename }) {
+  const [editing, setEditing] = useState(false)
+  const [val,     setVal]     = useState('')
+  if (editing) return (
+    <div style={{ display: 'flex', gap: 6, marginBottom: 10 }}>
+      <input value={val} onChange={e => setVal(e.target.value)} autoFocus
+        onKeyDown={async e => { if (e.key === 'Enter' && val.trim()) { await supabase.from('map_zones').update({ label: val.trim() }).eq('id', zone.id); onRename(zone.id, val.trim()); setEditing(false) } if (e.key === 'Escape') setEditing(false) }}
+        style={{ flex: 1, background: 'rgba(255,255,255,0.07)', border: '1px solid #FECB00', borderRadius: 7, padding: '7px 10px', fontSize: 13, color: '#fff', outline: 'none' }} />
+      <button onClick={async () => { if (!val.trim()) return; await supabase.from('map_zones').update({ label: val.trim() }).eq('id', zone.id); onRename(zone.id, val.trim()); setEditing(false) }}
+        style={{ padding: '7px 12px', borderRadius: 7, background: '#FECB00', color: '#1B2869', border: 'none', fontWeight: 700, fontSize: 12, cursor: 'pointer' }}>Save</button>
+      <button onClick={() => setEditing(false)} style={{ padding: '7px 10px', borderRadius: 7, background: 'transparent', color: 'rgba(255,255,255,0.35)', border: '1px solid rgba(255,255,255,0.12)', fontSize: 12, cursor: 'pointer' }}>✕</button>
+    </div>
+  )
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+      <span style={{ fontSize: 13, color: 'rgba(255,255,255,0.5)' }}>Name:</span>
+      <span style={{ fontSize: 13, fontWeight: 600, color: '#fff', flex: 1 }}>{zone.label}</span>
+      <button onClick={() => { setVal(zone.label); setEditing(true) }}
+        style={{ fontSize: 11, color: 'rgba(255,255,255,0.35)', background: 'none', border: '1px solid rgba(255,255,255,0.15)', borderRadius: 6, padding: '3px 8px', cursor: 'pointer' }}>Rename</button>
+    </div>
+  )
+}
+
+// ─── Zone lead section ────────────────────────────────────────────────────────
+function ZoneLeadSection({ zoneId }) {
+  const roleId = `ZONELEAD_${zoneId}`
+  const [leads,      setLeads]      = useState([])
+  const [volunteers, setVolunteers] = useState([])
+  const [adding,     setAdding]     = useState(false)
+  const [addVol,     setAddVol]     = useState('')
+  const [swapping,   setSwapping]   = useState(null)
+  const [swapVol,    setSwapVol]    = useState('')
+
+  useEffect(() => {
+    supabase.from('role_assignments').select('*').eq('role_id', roleId).order('slot_order').then(({ data }) => { if (data) setLeads(data) })
+    supabase.from('volunteers').select('id,name,phone').order('name').then(({ data }) => { if (data) setVolunteers(data) })
+  }, [roleId])
+
+  const addLead = async () => {
+    const vol = volunteers.find(v => v.id === addVol); if (!vol) return
+    const { data } = await supabase.from('role_assignments').upsert({ role_id: roleId, volunteer_name: vol.name, volunteer_phone: vol.phone || null, is_lead: true, slot_order: leads.length }, { onConflict: 'role_id,volunteer_name' }).select().single()
+    if (data) setLeads(prev => [...prev.filter(r => r.volunteer_name !== vol.name), data])
+    setAdding(false); setAddVol('')
+  }
+
+  const removeLead = async (id) => {
+    await supabase.from('role_assignments').delete().eq('id', id)
+    setLeads(prev => prev.filter(r => r.id !== id))
+  }
+
+  const swapLead = async (row) => {
+    const vol = volunteers.find(v => v.id === swapVol); if (!vol) return
+    await supabase.from('role_assignments').delete().eq('id', row.id)
+    const { data } = await supabase.from('role_assignments').upsert({ role_id: roleId, volunteer_name: vol.name, volunteer_phone: vol.phone || null, is_lead: true, slot_order: row.slot_order }, { onConflict: 'role_id,volunteer_name' }).select().single()
+    if (data) setLeads(prev => [...prev.filter(r => r.id !== row.id && r.volunteer_name !== vol.name), data])
+    setSwapping(null); setSwapVol('')
+  }
+
+  const selCss = { background: 'rgba(0,0,0,0.2)', border: '1px solid rgba(255,255,255,0.2)', borderRadius: 7, padding: '6px 8px', fontSize: 12, color: '#fff', outline: 'none', flex: 1, appearance: 'none' }
+
+  return (
+    <div style={{ marginBottom: 12, padding: '10px 12px', background: 'rgba(254,203,0,0.06)', borderRadius: 10, border: '1px solid rgba(254,203,0,0.15)' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+        <span style={{ fontSize: 10, fontWeight: 700, color: '#FECB00', textTransform: 'uppercase', letterSpacing: '0.1em' }}>Zone lead</span>
+        <button onClick={() => setAdding(a => !a)} style={{ fontSize: 10, color: '#FECB00', background: 'none', border: '1px solid rgba(254,203,0,0.3)', borderRadius: 5, padding: '2px 7px', cursor: 'pointer' }}>+ Add</button>
+      </div>
+      {adding && (
+        <div style={{ display: 'flex', gap: 6, marginBottom: 8 }}>
+          <select value={addVol} onChange={e => setAddVol(e.target.value)} style={selCss}>
+            <option value="">— select —</option>
+            {volunteers.map(v => <option key={v.id} value={v.id}>{v.name}{v.phone ? ` · ${v.phone}` : ''}</option>)}
+          </select>
+          <button onClick={addLead} disabled={!addVol} style={{ padding: '6px 10px', borderRadius: 6, background: addVol ? '#FECB00' : 'rgba(255,255,255,0.08)', color: addVol ? '#1B2869' : 'rgba(255,255,255,0.3)', border: 'none', fontWeight: 700, fontSize: 11, cursor: addVol ? 'pointer' : 'not-allowed' }}>Add</button>
+          <button onClick={() => { setAdding(false); setAddVol('') }} style={{ padding: '6px 8px', borderRadius: 6, background: 'transparent', color: 'rgba(255,255,255,0.35)', border: '1px solid rgba(255,255,255,0.12)', fontSize: 11, cursor: 'pointer' }}>✕</button>
+        </div>
+      )}
+      {leads.length === 0 && !adding && <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.3)', fontStyle: 'italic' }}>No lead assigned</div>}
+      {leads.map(row => (
+        <div key={row.id}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '5px 0' }}>
+            <span style={{ fontSize: 9, fontWeight: 700, color: '#1B2869', background: '#FECB00', borderRadius: 3, padding: '1px 5px' }}>LEAD</span>
+            <div style={{ flex: 1 }}>
+              <div style={{ fontSize: 13, fontWeight: 500, color: '#fff' }}>{row.volunteer_name}</div>
+              {row.volunteer_phone && <a href={`tel:${row.volunteer_phone}`} style={{ fontSize: 11, color: '#FECB00' }}>{row.volunteer_phone}</a>}
+            </div>
+            <button onClick={() => setSwapping(swapping === row.id ? null : row.id)} style={{ fontSize: 10, color: swapping === row.id ? '#FECB00' : 'rgba(255,255,255,0.3)', background: 'none', border: '1px solid rgba(255,255,255,0.15)', borderRadius: 5, padding: '2px 6px', cursor: 'pointer' }}>swap</button>
+            <button onClick={() => removeLead(row.id)} style={{ fontSize: 15, color: 'rgba(255,255,255,0.2)', background: 'none', border: 'none', cursor: 'pointer', padding: 0, lineHeight: 1 }}>×</button>
+          </div>
+          {swapping === row.id && (
+            <div style={{ display: 'flex', gap: 6, marginTop: 4, marginBottom: 4 }}>
+              <select value={swapVol} onChange={e => setSwapVol(e.target.value)} style={selCss}>
+                <option value="">— replace with —</option>
+                {volunteers.map(v => <option key={v.id} value={v.id}>{v.name}</option>)}
+              </select>
+              <button onClick={() => swapLead(row)} disabled={!swapVol} style={{ padding: '6px 8px', borderRadius: 6, background: swapVol ? '#FECB00' : 'rgba(255,255,255,0.08)', color: swapVol ? '#1B2869' : 'rgba(255,255,255,0.3)', border: 'none', fontWeight: 700, fontSize: 11, cursor: swapVol ? 'pointer' : 'not-allowed' }}>↔</button>
+            </div>
+          )}
+        </div>
+      ))}
+    </div>
+  )
+}
+
 export default function MapTab() {
   const mapRef      = useRef(null)
   const mapObjRef   = useRef(null)
@@ -179,7 +283,8 @@ export default function MapTab() {
   const [routeLabel,  setRouteLabel]  = useState('Route')
   const [editId,      setEditId]      = useState(null)
   const [zoneInspect, setZoneInspect] = useState(null) // { zone, items }
-  const [editingZone,  setEditingZone]  = useState(null) // zone being renamed
+  const [editingZone,  setEditingZone]  = useState(null)
+  const [renameValue,  setRenameValue]  = useState('')
   const [zonePoints,  setZonePoints]  = useState([])
   const [zoneColor,   setZoneColor]   = useState('#22c55e')
   const [zoneLabel,   setZoneLabel]   = useState('')
@@ -607,13 +712,13 @@ export default function MapTab() {
                   <div key={z.id} style={{ background: 'rgba(255,255,255,0.04)', borderRadius: 6, marginBottom: 4, overflow: 'hidden' }}>
                     {editingZone === z.id ? (
                       <div style={{ padding: '6px 8px', display: 'flex', gap: 5 }}>
-                        <input defaultValue={z.label} id={`zn_${z.id}`}
-                          style={{ flex: 1, background: 'rgba(255,255,255,0.07)', border: '1px solid rgba(255,255,255,0.2)', borderRadius: 5, padding: '4px 7px', fontSize: 11, color: '#fff', outline: 'none' }} />
+                        <input value={renameValue} onChange={e => setRenameValue(e.target.value)}
+                          autoFocus onKeyDown={async e => { if (e.key === 'Enter' && renameValue.trim()) { await supabase.from('map_zones').update({ label: renameValue.trim() }).eq('id', z.id); setZones(prev => prev.map(x => x.id === z.id ? { ...x, label: renameValue.trim() } : x)); setEditingZone(null) } if (e.key === 'Escape') setEditingZone(null) }}
+                          style={{ flex: 1, background: 'rgba(255,255,255,0.07)', border: `1px solid ${YELLOW}`, borderRadius: 5, padding: '4px 7px', fontSize: 11, color: '#fff', outline: 'none' }} />
                         <button onClick={async () => {
-                          const val = document.getElementById(`zn_${z.id}`).value.trim()
-                          if (!val) return
-                          await supabase.from('map_zones').update({ label: val }).eq('id', z.id)
-                          setZones(prev => prev.map(x => x.id === z.id ? { ...x, label: val } : x))
+                          if (!renameValue.trim()) return
+                          await supabase.from('map_zones').update({ label: renameValue.trim() }).eq('id', z.id)
+                          setZones(prev => prev.map(x => x.id === z.id ? { ...x, label: renameValue.trim() } : x))
                           setEditingZone(null)
                         }} style={{ padding: '4px 8px', borderRadius: 5, background: YELLOW, color: NAVY, border: 'none', fontWeight: 700, fontSize: 10, cursor: 'pointer' }}>✓</button>
                         <button onClick={() => setEditingZone(null)} style={{ padding: '4px 6px', borderRadius: 5, background: 'transparent', color: 'rgba(255,255,255,0.35)', border: '1px solid rgba(255,255,255,0.12)', fontSize: 10, cursor: 'pointer' }}>✕</button>
@@ -621,8 +726,8 @@ export default function MapTab() {
                     ) : (
                       <div style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '5px 7px' }}>
                         <div style={{ width: 7, height: 7, borderRadius: 1, background: z.color, flexShrink: 0 }} />
-                        <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.7)', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{z.label}</span>
-                        <button onClick={() => setEditingZone(z.id)} style={{ fontSize: 9, color: 'rgba(255,255,255,0.35)', background: 'none', border: '1px solid rgba(255,255,255,0.12)', borderRadius: 4, padding: '2px 5px', cursor: 'pointer' }}>rename</button>
+                        <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.7)', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{z.label || '(unnamed)'}</span>
+                        <button onClick={() => { setEditingZone(z.id); setRenameValue(z.label || '') }} style={{ fontSize: 9, color: 'rgba(255,255,255,0.35)', background: 'none', border: '1px solid rgba(255,255,255,0.12)', borderRadius: 4, padding: '2px 5px', cursor: 'pointer' }}>rename</button>
                         <button onClick={() => deleteZone(z.id)} style={{ fontSize: 13, color: 'rgba(255,255,255,0.2)', background: 'none', border: 'none', cursor: 'pointer', padding: 0, lineHeight: 1 }}>×</button>
                       </div>
                     )}
@@ -679,7 +784,11 @@ export default function MapTab() {
             </div>
           </div>
           <div style={{ padding: 14 }}>
-            <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.35)', marginBottom: 10 }}>{zoneInspect.items.length} item{zoneInspect.items.length !== 1 ? 's' : ''} in this zone</div>
+            {/* Rename zone inline */}
+            <ZoneRenameInline zone={zoneInspect.zone} onRename={(id, label) => { setZones(prev => prev.map(z => z.id === id ? { ...z, label } : z)); setZoneInspect(prev => ({ ...prev, zone: { ...prev.zone, label } })) }} />
+            {/* Zone lead */}
+            <ZoneLeadSection zoneId={zoneInspect.zone.id} />
+            <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.35)', margin: '12px 0 8px' }}>{zoneInspect.items.length} item{zoneInspect.items.length !== 1 ? 's' : ''} in this zone</div>
             {zoneInspect.items.length === 0 && <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.25)', fontStyle: 'italic' }}>No items placed in this zone yet</div>}
             {zoneInspect.items.map(item => {
               const ic = (typeof ICONS !== 'undefined' ? ICONS : {})[item.icon] || { emoji: '📌' }
