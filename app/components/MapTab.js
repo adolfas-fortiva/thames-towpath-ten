@@ -605,7 +605,7 @@ export default function MapTab() {
         {mode !== 'view' && (
           <div style={{ position: 'absolute', top: 10, left: '50%', transform: 'translateX(-50%)', background: YELLOW, color: NAVY, fontWeight: 700, fontSize: 12, padding: '6px 14px', borderRadius: 20, pointerEvents: 'none', whiteSpace: 'nowrap' }}>
             {mode === 'place' ? (form.label.trim() ? `Click to place: ${form.label}` : 'Enter a name first')
-              : mode === 'zone' ? `Drawing: ${zoneLabel || 'Zone'} — ${zonePoints.length} pts (need ≥3)`
+              : mode === 'zone' ? (zoneLabel || 'Zone')
               : `Drawing route: ${routeLabel} — ${routePoints.length} pts`}
           </div>
         )}
