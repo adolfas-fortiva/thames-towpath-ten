@@ -11,7 +11,7 @@ const inp = { width: '100%', background: 'rgba(0,0,0,0.25)', border: '1px solid 
 const lbl = { fontSize: 11, color: 'rgba(255,255,255,0.45)', marginBottom: 4, display: 'block' }
 const sel = { ...inp, appearance: 'none', WebkitAppearance: 'none' }
 
-export default function MapEditPanel({ overlay, onClose, onSave, onDelete, onMapPan }) {
+export default function MapEditPanel({ overlay, onClose, onSave, onDelete, onMapPan, onW3wMove }) {
   const [form,       setForm]       = useState(null)
   const [volunteers, setVolunteers] = useState([])
   const [assigned,   setAssigned]   = useState([])
@@ -107,10 +107,12 @@ export default function MapEditPanel({ overlay, onClose, onSave, onDelete, onMap
           <div style={{ display: 'flex', gap: 6 }}>
             <input value={form.w3w} onChange={e => setF('w3w', e.target.value.replace(/^\/+/,''))} placeholder="word.word.word" style={{ ...inp, flex: 1 }} />
             <button onClick={async () => {
+              if (!form.w3w?.trim()) return
               const pos = await w3wToLatLng(form.w3w)
-              if (pos && onMapPan) onMapPan(pos)
-            }} title="Find on map"
-              style={{ padding: '7px 10px', borderRadius: 7, background: 'rgba(231,76,60,0.15)', color: '#e74c3c', border: '1px solid rgba(231,76,60,0.3)', fontSize: 12, cursor: 'pointer', flexShrink: 0 }}>
+              if (!pos) { alert('w3w address not found'); return }
+              if (onW3wMove) onW3wMove(pos, form.w3w.trim())
+            }} title="Move marker to this w3w location"
+              style={{ padding: '7px 10px', borderRadius: 7, background: 'rgba(231,76,60,0.2)', color: '#e74c3c', border: '1px solid rgba(231,76,60,0.4)', fontSize: 12, cursor: 'pointer', flexShrink: 0, fontWeight: 700 }}>
               ///
             </button>
             {form.w3w && (

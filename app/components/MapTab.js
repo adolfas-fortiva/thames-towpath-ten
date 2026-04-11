@@ -500,6 +500,12 @@ export default function MapTab() {
           onSave={handleSave}
           onDelete={deleteOverlay}
           onMapPan={pos => { if (mapObjRef.current) { mapObjRef.current.panTo(pos); mapObjRef.current.setZoom(19) } }}
+          onW3wMove={async (pos, w3w) => {
+            // Move the marker to the geocoded w3w position
+            await supabase.from('map_overlays').update({ lat: pos.lat, lng: pos.lng, w3w }).eq('id', editOverlay.id)
+            setOverlays(prev => prev.map(o => o.id === editOverlay.id ? { ...o, lat: pos.lat, lng: pos.lng, w3w } : o))
+            if (mapObjRef.current) { mapObjRef.current.panTo(pos); mapObjRef.current.setZoom(19) }
+          }}
         />
       )}
     </div>
