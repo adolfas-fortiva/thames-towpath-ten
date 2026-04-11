@@ -22,6 +22,7 @@ export default function MapEditPanel({ overlay, onClose, onSave, onDelete, onMap
   const [swapVol,    setSwapVol]    = useState('')
   const [saving,     setSaving]     = useState(false)
   const [expanded,   setExpanded]   = useState(false)
+  const [w3wStatus,  setW3wStatus]  = useState('idle') // idle | loading | ok | error
 
   const roleId = overlay ? `MAP_${overlay.id}` : null
 
@@ -107,13 +108,22 @@ export default function MapEditPanel({ overlay, onClose, onSave, onDelete, onMap
           <div style={{ display: 'flex', gap: 6 }}>
             <input value={form.w3w} onChange={e => setF('w3w', e.target.value.replace(/^\/+/,''))} placeholder="word.word.word" style={{ ...inp, flex: 1 }} />
             <button onClick={async () => {
-              if (!form.w3w?.trim()) return
-              const pos = await w3wToLatLng(form.w3w)
-              if (!pos) { alert('w3w address not found'); return }
-              if (onW3wMove) onW3wMove(pos, form.w3w.trim())
+              const words = form.w3w?.trim()
+              if (!words) return
+              setW3wStatus('loading')
+              try {
+                const clean = words.replace(/^\/+/, '')
+                const resp = await fetch(`https://api.what3words.com/v3/convert-to-coordinates?words=${encodeURIComponent(clean)}&key=F2VIPT0Q`)
+                const data = await resp.json()
+                if (data.error || !data.coordinates) { setW3wStatus('error'); setTimeout(() => setW3wStatus('idle'), 2000); return }
+                const pos = { lat: data.coordinates.lat, lng: data.coordinates.lng }
+                setW3wStatus('ok')
+                if (onW3wMove) onW3wMove(pos, clean)
+                setTimeout(() => setW3wStatus('idle'), 1500)
+              } catch(e) { setW3wStatus('error'); setTimeout(() => setW3wStatus('idle'), 2000) }
             }} title="Move marker to this w3w location"
-              style={{ padding: '7px 10px', borderRadius: 7, background: 'rgba(231,76,60,0.2)', color: '#e74c3c', border: '1px solid rgba(231,76,60,0.4)', fontSize: 12, cursor: 'pointer', flexShrink: 0, fontWeight: 700 }}>
-              ///
+              style={{ padding: '7px 10px', borderRadius: 7, background: w3wStatus === 'ok' ? 'rgba(34,197,94,0.2)' : w3wStatus === 'error' ? 'rgba(239,68,68,0.2)' : 'rgba(231,76,60,0.2)', color: w3wStatus === 'ok' ? '#22c55e' : w3wStatus === 'error' ? '#ef4444' : '#e74c3c', border: `1px solid ${w3wStatus === 'ok' ? 'rgba(34,197,94,0.4)' : 'rgba(231,76,60,0.4)'}`, fontSize: 12, cursor: 'pointer', flexShrink: 0, fontWeight: 700 }}>
+              {w3wStatus === 'loading' ? '…' : w3wStatus === 'ok' ? '✓' : w3wStatus === 'error' ? '✗' : '///'}
             </button>
             {form.w3w && (
               <a href={`https://w3w.co/${form.w3w}`} target="_blank" rel="noopener noreferrer"
