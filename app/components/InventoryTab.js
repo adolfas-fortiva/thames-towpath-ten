@@ -10,16 +10,6 @@ const PHASES = [
 ]
 const INV_ROLE_IDS = PHASES.map(p => `INV_${p.id.toUpperCase()}`)
 
-function QtyBadge({ required, actual }) {
-  const ok = actual !== null && actual !== undefined && actual >= required
-  const color = actual === null || actual === undefined ? 'rgba(255,255,255,0.2)' : ok ? YELLOW : '#ef4444'
-  return (
-    <span style={{ fontSize: 11, fontWeight: 700, color, background: 'rgba(255,255,255,0.06)', borderRadius: 6, padding: '2px 8px', border: `1px solid ${color}`, flexShrink: 0 }}>
-      {actual !== null && actual !== undefined ? `${actual} / ${required}` : `need ${required}`}
-    </span>
-  )
-}
-
 export default function InventoryTab() {
   const [phase,   setPhase]   = useState('prerace')
   const [items,   setItems]   = useState([])
@@ -144,7 +134,6 @@ export default function InventoryTab() {
                         placeholder="qty"
                         style={{ width: 80, background: 'rgba(255,255,255,0.07)', border: '1px solid rgba(255,255,255,0.15)', borderRadius: 6, padding: '4px 8px', fontSize: 12, color: '#fff', outline: 'none' }}
                       />
-                      <QtyBadge required={item.quantity_required} actual={check?.quantity_actual} />
                     </div>
                   )}
                 </div>
@@ -174,13 +163,6 @@ export default function InventoryTab() {
               <input type="checkbox" checked={newItem.has_quantity} onChange={e => setNewItem(p => ({ ...p, has_quantity: e.target.checked }))} style={{ accentColor: YELLOW }} />
               Track quantity
             </label>
-            {newItem.has_quantity && (
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                <span style={{ fontSize: 13, color: 'rgba(255,255,255,0.5)' }}>Required qty</span>
-                <input type="number" value={newItem.quantity_required} onChange={e => setNewItem(p => ({ ...p, quantity_required: parseInt(e.target.value) || 1 }))}
-                  style={{ width: 80, background: 'rgba(255,255,255,0.07)', border: '1px solid rgba(255,255,255,0.15)', borderRadius: 6, padding: '6px 8px', fontSize: 13, color: '#fff', outline: 'none' }} />
-              </div>
-            )}
             <input value={newItem.notes} onChange={e => setNewItem(p => ({ ...p, notes: e.target.value }))} placeholder="Notes (optional)" style={inputStyle} />
             <div style={{ display: 'flex', gap: 8 }}>
               <button onClick={addItem} style={{ flex: 1, padding: 10, borderRadius: 8, background: YELLOW, color: NAVY, border: 'none', fontWeight: 700, fontSize: 13, cursor: 'pointer' }}>Add</button>
