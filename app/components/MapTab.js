@@ -179,6 +179,7 @@ export default function MapTab() {
   const [routeLabel,  setRouteLabel]  = useState('Route')
   const [editId,      setEditId]      = useState(null)
   const [zoneInspect, setZoneInspect] = useState(null) // { zone, items }
+  const [editingZone,  setEditingZone]  = useState(null) // zone being renamed
   const [zonePoints,  setZonePoints]  = useState([])
   const [zoneColor,   setZoneColor]   = useState('#22c55e')
   const [zoneLabel,   setZoneLabel]   = useState('')
@@ -469,7 +470,7 @@ export default function MapTab() {
           <div style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.12)', borderRadius: 10, padding: '8px 10px' }}>
             <div style={{ fontSize: 9, fontWeight: 700, color: 'rgba(255,255,255,0.3)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 6 }}>Mode</div>
             <div style={{ display: 'flex', gap: 4 }}>
-              {[['view','View'],['place','Place'],['route','Route'],['zone','Zone']].map(([m, lbl]) => (
+              {[['view','View'],['place','Place'],['route','Route'],['zone','Zones']].map(([m, lbl]) => (
                 <button key={m} onClick={() => { setMode(m); if (m !== 'route') cancelRoute(); if (m !== 'zone') cancelZone(); if (m !== 'view') setEditId(null) }}
                   style={{ flex: 1, padding: '6px 3px', borderRadius: 6, border: `1px solid ${mode === m ? YELLOW : 'rgba(255,255,255,0.12)'}`, background: mode === m ? YELLOW : 'transparent', color: mode === m ? NAVY : 'rgba(255,255,255,0.5)', cursor: 'pointer', fontSize: 10, fontWeight: mode === m ? 700 : 400 }}>
                   {lbl}
@@ -479,10 +480,10 @@ export default function MapTab() {
           </div>
 
           <div style={{ display: 'flex', gap: 3, flexWrap: 'wrap' }}>
-            {['place','route','zone','items'].map(t => (
+            {[['place','Place'],['route','Route'],['zone','Zones'],['items','On map']].map(([t, lbl]) => (
               <button key={t} onClick={() => setSideTab(t)}
-                style={{ flex: 1, padding: '4px 2px', borderRadius: 6, border: `1px solid ${sideTab === t ? YELLOW : 'rgba(255,255,255,0.12)'}`, background: sideTab === t ? YELLOW : 'transparent', color: sideTab === t ? NAVY : 'rgba(255,255,255,0.4)', fontSize: 9, fontWeight: sideTab === t ? 700 : 400, cursor: 'pointer', textTransform: 'capitalize' }}>
-                {t === 'items' ? 'On map' : t}
+                style={{ flex: 1, padding: '4px 2px', borderRadius: 6, border: `1px solid ${sideTab === t ? YELLOW : 'rgba(255,255,255,0.12)'}`, background: sideTab === t ? YELLOW : 'transparent', color: sideTab === t ? NAVY : 'rgba(255,255,255,0.4)', fontSize: 9, fontWeight: sideTab === t ? 700 : 400, cursor: 'pointer' }}>
+                {lbl}
               </button>
             ))}
           </div>
@@ -578,7 +579,7 @@ export default function MapTab() {
           {/* Zone panel */}
           {sideTab === 'zone' && (
             <div style={{ background: 'rgba(255,255,255,0.06)', border: `1px solid ${mode === 'zone' ? YELLOW : 'rgba(255,255,255,0.12)'}`, borderRadius: 10, padding: '8px 10px', display: 'flex', flexDirection: 'column', gap: 7, overflowY: 'auto' }}>
-              <div style={{ fontSize: 9, fontWeight: 700, color: mode === 'zone' ? YELLOW : 'rgba(255,255,255,0.3)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>Zone area</div>
+              <div style={{ fontSize: 9, fontWeight: 700, color: mode === 'zone' ? YELLOW : 'rgba(255,255,255,0.3)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>Draw zone</div>
               <input value={zoneLabel} onChange={e => setZoneLabel(e.target.value)} placeholder="Zone name" style={iS} />
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
                 {[['#22c55e','Field'],['#3b82f6','Richmond'],['#f97316','Ham'],['#a855f7','Kingston'],['#ec4899','Custom']].map(([c, lbl]) => (
@@ -603,10 +604,28 @@ export default function MapTab() {
               {zones.length > 0 && <>
                 <div style={{ fontSize: 9, color: 'rgba(255,255,255,0.3)', textTransform: 'uppercase', marginTop: 4 }}>Saved zones</div>
                 {zones.map(z => (
-                  <div key={z.id} style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '4px 5px', background: 'rgba(255,255,255,0.04)', borderRadius: 4 }}>
-                    <div style={{ width: 7, height: 7, borderRadius: 1, background: z.color, flexShrink: 0, border: `1px solid ${z.color}` }} />
-                    <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.6)', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{z.label}</span>
-                    <button onClick={() => deleteZone(z.id)} style={{ fontSize: 12, color: 'rgba(255,255,255,0.2)', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>×</button>
+                  <div key={z.id} style={{ background: 'rgba(255,255,255,0.04)', borderRadius: 6, marginBottom: 4, overflow: 'hidden' }}>
+                    {editingZone === z.id ? (
+                      <div style={{ padding: '6px 8px', display: 'flex', gap: 5 }}>
+                        <input defaultValue={z.label} id={`zn_${z.id}`}
+                          style={{ flex: 1, background: 'rgba(255,255,255,0.07)', border: '1px solid rgba(255,255,255,0.2)', borderRadius: 5, padding: '4px 7px', fontSize: 11, color: '#fff', outline: 'none' }} />
+                        <button onClick={async () => {
+                          const val = document.getElementById(`zn_${z.id}`).value.trim()
+                          if (!val) return
+                          await supabase.from('map_zones').update({ label: val }).eq('id', z.id)
+                          setZones(prev => prev.map(x => x.id === z.id ? { ...x, label: val } : x))
+                          setEditingZone(null)
+                        }} style={{ padding: '4px 8px', borderRadius: 5, background: YELLOW, color: NAVY, border: 'none', fontWeight: 700, fontSize: 10, cursor: 'pointer' }}>✓</button>
+                        <button onClick={() => setEditingZone(null)} style={{ padding: '4px 6px', borderRadius: 5, background: 'transparent', color: 'rgba(255,255,255,0.35)', border: '1px solid rgba(255,255,255,0.12)', fontSize: 10, cursor: 'pointer' }}>✕</button>
+                      </div>
+                    ) : (
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '5px 7px' }}>
+                        <div style={{ width: 7, height: 7, borderRadius: 1, background: z.color, flexShrink: 0 }} />
+                        <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.7)', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{z.label}</span>
+                        <button onClick={() => setEditingZone(z.id)} style={{ fontSize: 9, color: 'rgba(255,255,255,0.35)', background: 'none', border: '1px solid rgba(255,255,255,0.12)', borderRadius: 4, padding: '2px 5px', cursor: 'pointer' }}>rename</button>
+                        <button onClick={() => deleteZone(z.id)} style={{ fontSize: 13, color: 'rgba(255,255,255,0.2)', background: 'none', border: 'none', cursor: 'pointer', padding: 0, lineHeight: 1 }}>×</button>
+                      </div>
+                    )}
                   </div>
                 ))}
               </>}
@@ -653,7 +672,11 @@ export default function MapTab() {
               <div style={{ width: 10, height: 10, borderRadius: 2, background: zoneInspect.zone.color }} />
               <div style={{ fontSize: 14, fontWeight: 700, color: '#fff' }}>{zoneInspect.zone.label}</div>
             </div>
-            <button onClick={() => setZoneInspect(null)} style={{ background: 'none', border: 'none', color: 'rgba(255,255,255,0.4)', cursor: 'pointer', fontSize: 20, lineHeight: 1 }}>×</button>
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+              <button onClick={async () => { await deleteZone(zoneInspect.zone.id); setZoneInspect(null) }}
+                style={{ fontSize: 11, color: '#ef4444', background: 'rgba(239,68,68,0.12)', border: '1px solid rgba(239,68,68,0.3)', borderRadius: 6, padding: '3px 8px', cursor: 'pointer' }}>Delete zone</button>
+              <button onClick={() => setZoneInspect(null)} style={{ background: 'none', border: 'none', color: 'rgba(255,255,255,0.4)', cursor: 'pointer', fontSize: 20, lineHeight: 1 }}>×</button>
+            </div>
           </div>
           <div style={{ padding: 14 }}>
             <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.35)', marginBottom: 10 }}>{zoneInspect.items.length} item{zoneInspect.items.length !== 1 ? 's' : ''} in this zone</div>
