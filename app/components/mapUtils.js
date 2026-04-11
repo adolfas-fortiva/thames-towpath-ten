@@ -96,3 +96,27 @@ export function rotHandlePos(lat, lng, rotDeg) {
 export function cornerPositions(lat, lng, widthM, heightM, rotDeg) {
   return getPolygonPath(lat, lng, widthM, heightM, rotDeg)
 }
+
+const W3W_KEY = 'F2VIPT0Q'
+
+// w3w address → { lat, lng } or null
+export async function w3wToLatLng(words) {
+  const clean = words.trim().replace(/^\/+/, '').replace(/\s/g, '')
+  if (clean.split('.').length !== 3) return null
+  try {
+    const r = await fetch(`https://api.what3words.com/v3/convert-to-coordinates?words=${encodeURIComponent(clean)}&key=${W3W_KEY}`)
+    const d = await r.json()
+    if (d.error || !d.coordinates) return null
+    return { lat: d.coordinates.lat, lng: d.coordinates.lng }
+  } catch { return null }
+}
+
+// { lat, lng } → w3w string or null
+export async function latLngToW3w(lat, lng) {
+  try {
+    const r = await fetch(`https://api.what3words.com/v3/convert-to-3wa?coordinates=${lat},${lng}&key=${W3W_KEY}`)
+    const d = await r.json()
+    if (d.error || !d.words) return null
+    return d.words
+  } catch { return null }
+}

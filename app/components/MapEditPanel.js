@@ -1,7 +1,7 @@
 'use client'
 import { useState, useEffect } from 'react'
 import { supabase } from '../supabase'
-import { ICONS, PRESET_COLORS } from './mapUtils'
+import { ICONS, PRESET_COLORS, w3wToLatLng } from './mapUtils'
 
 const YELLOW = '#FECB00'
 const NAVY   = '#1B2869'
@@ -11,7 +11,7 @@ const inp = { width: '100%', background: 'rgba(0,0,0,0.25)', border: '1px solid 
 const lbl = { fontSize: 11, color: 'rgba(255,255,255,0.45)', marginBottom: 4, display: 'block' }
 const sel = { ...inp, appearance: 'none', WebkitAppearance: 'none' }
 
-export default function MapEditPanel({ overlay, onClose, onSave, onDelete }) {
+export default function MapEditPanel({ overlay, onClose, onSave, onDelete, onMapPan }) {
   const [form,       setForm]       = useState(null)
   const [volunteers, setVolunteers] = useState([])
   const [assigned,   setAssigned]   = useState([])
@@ -106,13 +106,21 @@ export default function MapEditPanel({ overlay, onClose, onSave, onDelete }) {
           <span style={lbl}>what3words</span>
           <div style={{ display: 'flex', gap: 6 }}>
             <input value={form.w3w} onChange={e => setF('w3w', e.target.value.replace(/^\/+/,''))} placeholder="word.word.word" style={{ ...inp, flex: 1 }} />
+            <button onClick={async () => {
+              const pos = await w3wToLatLng(form.w3w)
+              if (pos && onMapPan) onMapPan(pos)
+            }} title="Find on map"
+              style={{ padding: '7px 10px', borderRadius: 7, background: 'rgba(231,76,60,0.15)', color: '#e74c3c', border: '1px solid rgba(231,76,60,0.3)', fontSize: 12, cursor: 'pointer', flexShrink: 0 }}>
+              ///
+            </button>
             {form.w3w && (
               <a href={`https://w3w.co/${form.w3w}`} target="_blank" rel="noopener noreferrer"
-                style={{ padding: '7px 10px', borderRadius: 7, background: 'rgba(231,76,60,0.15)', color: '#e74c3c', border: '1px solid rgba(231,76,60,0.3)', fontSize: 12, textDecoration: 'none', flexShrink: 0 }}>
-                Open
+                style={{ padding: '7px 10px', borderRadius: 7, background: 'rgba(231,76,60,0.08)', color: '#e74c3c', border: '1px solid rgba(231,76,60,0.2)', fontSize: 12, textDecoration: 'none', flexShrink: 0 }}>
+                ↗
               </a>
             )}
           </div>
+          <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.25)', marginTop: 4 }}>/// button pans map · ↗ opens what3words app</div>
         </div>
 
         {/* Notes */}

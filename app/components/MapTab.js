@@ -1,7 +1,7 @@
 'use client'
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { supabase } from '../supabase'
-import { ICONS, PRESET_COLORS, ROUTE_COLORS, ODP, getPolygonPath, rotHandlePos, cornerPositions, bearing, distanceM, destination } from './mapUtils'
+import { ICONS, PRESET_COLORS, ROUTE_COLORS, ODP, getPolygonPath, rotHandlePos, cornerPositions, bearing, distanceM, destination, w3wToLatLng, latLngToW3w } from './mapUtils'
 import MapEditPanel from './MapEditPanel'
 
 const YELLOW = '#FECB00'
@@ -218,12 +218,14 @@ export default function MapTab() {
     if (!mapObjRef.current || mode !== 'place') return
     const listener = mapObjRef.current.addListener('click', async (e) => {
       if (!form.label.trim()) return
+      const lat = e.latLng.lat(), lng = e.latLng.lng()
+      const autoW3w = form.w3w?.trim() ? form.w3w.trim() : (await latLngToW3w(lat, lng) || null)
       const { data } = await supabase.from('map_overlays').insert({
         label: form.label, icon: form.icon, category: 'custom',
-        lat: e.latLng.lat(), lng: e.latLng.lng(),
+        lat, lng,
         width_m: Number(form.width_m), height_m: Number(form.height_m),
         rotation_degrees: Number(form.rotation_degrees),
-        color: form.color, w3w: form.w3w || null, notes: form.notes || null,
+        color: form.color, w3w: autoW3w, notes: form.notes || null,
       }).select().single()
       if (data) setOverlays(prev => [...prev, data])
       setMode('view')
@@ -361,7 +363,17 @@ export default function MapTab() {
                     <input type="color" value={form.color} onChange={e => setF('color', e.target.value)} style={{ width: 18, height: 18, borderRadius: 3, border: 'none', cursor: 'pointer', padding: 0 }} />
                   </div>
                 </div>
-                <div><span style={L}>w3w</span><input value={form.w3w} onChange={e => setF('w3w', e.target.value.replace(/^\/+/,''))} placeholder="word.word.word" style={i} /></div>
+                <div>
+                  <span style={L}>w3w — type to jump to location</span>
+                  <div style={{ display: 'flex', gap: 4 }}>
+                    <input value={form.w3w} onChange={e => setF('w3w', e.target.value.replace(/^\/+/,''))} placeholder="word.word.word" style={{ ...i, flex: 1 }} />
+                    <button onClick={async () => {
+                      const pos = await w3wToLatLng(form.w3w)
+                      if (pos && mapObjRef.current) { mapObjRef.current.panTo(pos); mapObjRef.current.setZoom(19) }
+                    }} title="Jump to w3w on map"
+                      style={{ padding: '4px 7px', borderRadius: 6, background: 'rgba(231,76,60,0.2)', color: '#e74c3c', border: '1px solid rgba(231,76,60,0.4)', fontSize: 11, cursor: 'pointer', flexShrink: 0 }}>///</button>
+                  </div>
+                </div>
                 <button onClick={() => setMode('place')} disabled={!form.label.trim()}
                   style={{ padding: 8, borderRadius: 7, background: form.label.trim() ? YELLOW : 'rgba(255,255,255,0.08)', color: form.label.trim() ? NAVY : 'rgba(255,255,255,0.3)', border: 'none', fontWeight: 700, fontSize: 11, cursor: form.label.trim() ? 'pointer' : 'not-allowed' }}>
                   {mode === 'place' ? '→ Click map' : 'Place on map'}
@@ -446,6 +458,7 @@ export default function MapTab() {
           onClose={() => setEditId(null)}
           onSave={handleSave}
           onDelete={deleteOverlay}
+          onMapPan={pos => { if (mapObjRef.current) { mapObjRef.current.panTo(pos); mapObjRef.current.setZoom(19) } }}
         />
       )}
     </div>
